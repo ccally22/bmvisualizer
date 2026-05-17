@@ -1468,7 +1468,7 @@ class AppWindow:
                     extra_params['use_pca'] = False
                     extra_params['flat_hand_mean'] = True
                     extra_params['use_face_contour'] = True
-                elif body_model == 'STAR':
+                if body_model == 'STAR':
                     model = STAR(gender=gender.lower())
                 else:
                     try:
