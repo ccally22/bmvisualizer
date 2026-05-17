@@ -44,6 +44,9 @@ import open3d.visualization.rendering as rendering
 #from supr.pytorch.supr import SUPR
 from SUPR.supr.pytorch.supr import SUPR
 
+# import star as STAR ?
+from STAR.star.pytorch.star import STAR
+
 from utils import (
     get_checkerboard_plane,
     smpl_joint_names,
@@ -246,14 +249,15 @@ class AppWindow:
     MATERIAL_SHADERS = [
         Settings.LIT, Settings.UNLIT, Settings.NORMALS, Settings.DEPTH
     ]
-
-    BODY_MODEL_NAMES = ["SMPL", "SMPLX", "MANO", "FLAME", "SUPR"]
+    # add Star
+    BODY_MODEL_NAMES = ["SMPL", "SMPLX", "MANO", "FLAME", "SUPR", "STAR"]
     BODY_MODEL_GENDERS = {
         'SMPL': ['neutral', 'male', 'female'],
         'SMPLX': ['neutral', 'male', 'female'],
         'MANO': ['neutral'],
         'FLAME': ['neutral', 'male', 'female'],
-        'SUPR': ['neutral', 'male', 'female']
+        'SUPR': ['neutral', 'male', 'female'],
+        'STAR': ['neutral', 'male', 'female']
     }
     BODY_MODEL_N_BETAS = {
         'SMPL': 10,
@@ -261,6 +265,7 @@ class AppWindow:
         'MANO': 10,
         'FLAME': 10,
         'SUPR': 10,
+        'STAR': 10,
     }
     CAM_FIRST = True
 
@@ -292,8 +297,13 @@ class AppWindow:
             'reye_pose': torch.zeros(1, 1, 3),
         },
         'SUPR': {
-            'pose': torch.zeros(1, 75, 3), 
+            'pose': torch.zeros(1, 75, 3),
             'trans': torch.zeros(1, 3),
+        },
+        'STAR' : {
+            'pose': torch.zeros(1, 24, 3),
+            #'betas': torch.zeros(1, 10), # not sure!!!!!
+            'trans': torch.zeros(1,3),
         }
     }
 
@@ -324,6 +334,12 @@ class AppWindow:
         },
         'SUPR': {
             'pose': SMPLX_NAMES,
+        },
+        'STAR': {
+
+            'pose': SMPL_NAMES[:24],  # doch smpl
+
+
         }
     }
 
@@ -333,6 +349,7 @@ class AppWindow:
         'MANO': MANO_NAMES,
         'FLAME': FLAME_KEYPOINT_NAMES,
         'SUPR': SMPLX_NAMES,
+        'STAR': SMPL_NAMES,
     }
 
     JOINTS = None
@@ -1451,14 +1468,16 @@ class AppWindow:
                     extra_params['use_pca'] = False
                     extra_params['flat_hand_mean'] = True
                     extra_params['use_face_contour'] = True
-                    
-                try:
-                    model = eval(body_model.upper())(f'data/body_models/{body_model.lower()}', **extra_params)
-                except:
-                    model = eval(body_model.upper())(f'data/body_models/{body_model.lower()}/supr_{gender}.npy')
-                
+                elif body_model == 'STAR':
+                    model = STAR(gender=gender.lower())
+                else:
+                    try:
+                        model = eval(body_model.upper())(f'data/body_models/{body_model.lower()}', **extra_params)
+                    except:
+                        model = eval(body_model.upper())(f'data/body_models/{body_model.lower()}/supr_{gender}.npy')
 
-                
+
+
                 AppWindow.PRELOADED_BODY_MODELS[f'{body_model.lower()}-{gender.lower()}'] = model
         logger.info(f'Loaded body models {AppWindow.PRELOADED_BODY_MODELS.keys()}')
 
@@ -1469,6 +1488,7 @@ class AppWindow:
         model = AppWindow.PRELOADED_BODY_MODELS[f'{body_model.lower()}-{gender.lower()}']
 
         input_params = copy.deepcopy(AppWindow.POSE_PARAMS[body_model])
+
 
         for k, v in input_params.items():
             input_params[k] = v.reshape(1, -1)

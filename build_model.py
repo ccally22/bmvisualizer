@@ -48,7 +48,9 @@ for bm in SMPL, SMPLX, MANO, FLAME:
         #     'pose': torch.zeros(225, 3),
         #     'trans': torch.zeros(1, 3),
         #     }
-        
+    elif bm.__name__ == 'STAR':
+        pass
+        # hier noch was hinzufügen?
 
     model_output = model(global_orient=global_orient, betas=betas, **input_args)
     print(f'{bm.__name__} - NUM_BODY_JOINTS {model.NUM_BODY_JOINTS}, NUM_JOINTS {model.NUM_JOINTS}, NUM_BETAS {model.num_betas}')

@@ -31,7 +31,32 @@ smpl_joint_names = [
     'left_index1',
     'righ_index1',
 ]
-
+STAR_NAMES = [
+    #'pelvis',          - warum ist das auskommentiert? einfach mal übernommen, woher hast du das?
+    'left_hip',
+    'right_hip',
+    'spine1',
+    'left_knee',
+    'right_knee',
+    'spine2',
+    'left_ankle',
+    'right_ankle',
+    'spine3',
+    'left_foot',
+    'right_foot',
+    'neck',
+    'left_collar',
+    'right_collar',
+    'head',
+    'left_shoulder',
+    'right_shoulder',
+    'left_elbow',
+    'right_elbow',
+    'left_wrist',
+    'right_wrist',
+    'left_index1',
+    'right_index1',
+]
 
 smplx_body_joint_names = [
     # 'pelvis',
