@@ -60,6 +60,7 @@ from utils import (
     SMPL_NAMES,
     SMPLX_NAMES,
     MANO_NAMES,
+    STAR_NAMES
 )
 from simple_ik import simple_ik_solver
 
@@ -298,12 +299,12 @@ class AppWindow:
         },
         'SUPR': {
             'pose': torch.zeros(1, 75, 3),
-            'trans': torch.zeros(1, 3),
+            'trans': torch.zeros(1,1, 3),
         },
         'STAR' : {
             'pose': torch.zeros(1, 24, 3),
             #'betas': torch.zeros(1, 10), # not sure!!!!!
-            'trans': torch.zeros(1,3),
+            'trans': torch.zeros(1, 1, 3),
         }
     }
 
@@ -334,12 +335,11 @@ class AppWindow:
         },
         'SUPR': {
             'pose': SMPLX_NAMES,
+            'trans': ["pelvis"]
         },
         'STAR': {
-
-            'pose': SMPL_NAMES[:24],  # doch smpl
-
-
+            'pose': STAR_NAMES,  # doch smpl
+            'trans': ["pelvis"]
         }
     }
 
@@ -1463,6 +1463,7 @@ class AppWindow:
         for body_model in AppWindow.BODY_MODEL_NAMES:
             for gender in AppWindow.BODY_MODEL_GENDERS[body_model]:
                 logger.info(f'Loading {body_model}-{gender}')
+
                 extra_params = {'gender': gender}
                 if body_model in ('SMPLX', 'MANO', 'FLAME'):
                     extra_params['use_pca'] = False

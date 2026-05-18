@@ -32,7 +32,7 @@ smpl_joint_names = [
     'righ_index1',
 ]
 STAR_NAMES = [
-    #'pelvis',          - warum ist das auskommentiert? einfach mal übernommen, woher hast du das?
+    'pelvis',          #- warum ist das auskommentiert? einfach mal übernommen, woher hast du das?
     'left_hip',
     'right_hip',
     'spine1',
