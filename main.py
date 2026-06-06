@@ -276,6 +276,7 @@ class AppWindow:
         'SMPL': {
             'body_pose': torch.zeros(1, 23, 3),
             'global_orient': torch.zeros(1, 1, 3),
+            'trans': torch.zeros(1, 1, 3),
         },
         'SMPLX': {
             'body_pose': torch.zeros(1, 21, 3),
@@ -285,10 +286,12 @@ class AppWindow:
             'jaw_pose': torch.zeros(1, 1, 3),
             'leye_pose': torch.zeros(1, 1, 3),
             'reye_pose': torch.zeros(1, 1, 3),
+            'trans': torch.zeros(1, 1, 3),
         },
         'MANO': {
             'hand_pose': torch.zeros(1, 15, 3),
             'global_orient': torch.zeros(1, 1, 3),
+            'trans': torch.zeros(1, 1, 3),
         },
         'FLAME': {
             'global_orient': torch.zeros(1, 1, 3),
@@ -296,6 +299,7 @@ class AppWindow:
             'neck_pose': torch.zeros(1, 1, 3),
             'leye_pose': torch.zeros(1, 1, 3),
             'reye_pose': torch.zeros(1, 1, 3),
+            'trans': torch.zeros(1, 1, 3),
         },
         'SUPR': {
             'pose': torch.zeros(1, 75, 3),
@@ -1630,6 +1634,10 @@ class AppWindow:
 
         #import ipdb; ipdb.set_trace()
 
+        if body_model in ["SMPL", "SMPLX", "MANO", "FLAME"] and "trans" in input_params:
+            # SMPL-family models use 'transl' instead of 'trans'
+            input_params["transl"] = input_params.pop("trans")
+
         model_output = model(
             betas=self._body_beta_tensor,
             #expression=self._body_exp_tensor,
@@ -1645,39 +1653,28 @@ class AppWindow:
 
         mesh.vertices = o3d.utility.Vector3dVector(verts)
         mesh.triangles = o3d.utility.Vector3iVector(faces)
+        
+        user_y = 0.0
+        if "trans" in AppWindow.POSE_PARAMS[body_model]:
+            user_y = AppWindow.POSE_PARAMS[body_model]["trans"][0, 0, 1].item()
+        # Remove user translation before computing ground offset.
+        # Otherwise Y translation would be cancelled by the floor alignment.
+        base_min_y = mesh.get_min_bound()[1] - user_y
+        ground_offset = -base_min_y
+
+        mesh.translate([0, ground_offset, 0])
+        AppWindow.JOINTS += np.array([0, ground_offset, 0])
         mesh.compute_vertex_normals()
         mesh.paint_uniform_color([0.5, 0.5, 0.5])
         
-        # min_y = -mesh.get_min_bound()[1]
-        # mesh.translate([0, min_y, 0])
-        # AppWindow.JOINTS += np.array([0, min_y, 0])
-
-        # NEWWW
-        min_y = -mesh.get_min_bound()[1]
-
-        if "trans" in input_params:
-
-            transl = input_params["trans"].reshape(3).detach().numpy()
-
-            transl[1] += min_y
-
-        else:
-
-            transl = np.array([0, min_y, 0])
-
-        mesh.translate(transl)
-
-        AppWindow.JOINTS += transl
-
-        # NEW END
-
+       
         self._scene.scene.add_geometry("__body_model__", mesh,
                                        self.settings.material)
         bounds = mesh.get_axis_aligned_bounding_box()
         if AppWindow.CAM_FIRST:
             self._scene.setup_camera(60, bounds, bounds.get_center())
             AppWindow.CAM_FIRST = False
-        AppWindow.BODY_TRANSL = torch.tensor([[0, min_y, 0]])
+        AppWindow.BODY_TRANSL = torch.tensor([[0, ground_offset, 0]])
         self._on_show_joints(self._show_joints.checked)
 
     def load(self, path):
