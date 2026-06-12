@@ -40,12 +40,16 @@ import open3d.visualization.gui as gui
 import scipy.spatial.transform.rotation as R
 import open3d.visualization.rendering as rendering
 
-# import supr as SUPR 
-#from supr.pytorch.supr import SUPR
+# import supr as SUPR
 from SUPR.supr.pytorch.supr import SUPR
 
 # import star as STAR ?
 from STAR.star.pytorch.star import STAR
+# import anny (es soll die lokale version benutzen)
+ANNY_SRC_DIR = os.path.join(os.path.dirname(__file__), "anny", "src")
+if os.path.isdir(ANNY_SRC_DIR) and ANNY_SRC_DIR not in sys.path:
+    sys.path.insert(0, ANNY_SRC_DIR)
+from anny.models.full_model import create_fullbody_model
 
 from utils import (
     get_checkerboard_plane,
@@ -250,16 +254,30 @@ class AppWindow:
     MATERIAL_SHADERS = [
         Settings.LIT, Settings.UNLIT, Settings.NORMALS, Settings.DEPTH
     ]
-    # add Star
-    BODY_MODEL_NAMES = ["SMPL", "SMPLX", "MANO", "FLAME", "SUPR", "STAR"]
+
+    ## ANNY TYPES
+    # interactive demo auswahlmöglichkeiten
+    ANNY_MODEL_TYPES = ["default", "left hand", "right hand", "head", "notoes_collapse10pc", "notoes_collapse5pc"]
+    ANNY_RIGS = [
+        'default',
+        'mixamo',
+        'default-noeyes-notongue-noexpression-nobreasts-notoes',
+        'default-noeyes-notongue-noexpression-nobreasts-notoes-nohands',
+    ]
+
+    # add Star and Anny
+    BODY_MODEL_NAMES = ["SMPL", "SMPLX", "MANO", "FLAME", "SUPR", "STAR", "ANNY"]
+    # für anny werden die rigs wie genders interpretiert
     BODY_MODEL_GENDERS = {
         'SMPL': ['neutral', 'male', 'female'],
         'SMPLX': ['neutral', 'male', 'female'],
         'MANO': ['neutral'],
         'FLAME': ['neutral', 'male', 'female'],
         'SUPR': ['neutral', 'male', 'female'],
-        'STAR': ['neutral', 'male', 'female']
+        'STAR': ['neutral', 'male', 'female'],
+        'ANNY': ANNY_RIGS,
     }
+
     BODY_MODEL_N_BETAS = {
         'SMPL': 10,
         'SMPLX': 10,
@@ -267,6 +285,7 @@ class AppWindow:
         'FLAME': 10,
         'SUPR': 10,
         'STAR': 10,
+        'ANNY': 0
     }
     CAM_FIRST = True
 
@@ -305,6 +324,11 @@ class AppWindow:
             'pose': torch.zeros(1, 24, 3),
             #'betas': torch.zeros(1, 10), # not sure!!!!!
             'trans': torch.zeros(1, 1, 3),
+        },
+        # erstmal nichts
+        'ANNY' : {
+            'pose': torch.zeros(1, 0, 3),
+            'trans': torch.zeros(1, 0, 3),
         }
     }
 
@@ -340,6 +364,11 @@ class AppWindow:
         'STAR': {
             'pose': STAR_NAMES,  # doch smpl
             'trans': ["pelvis"]
+        },
+        # erstmal nichts
+        'ANNY': {
+            'pose': [],
+            'trans': []
         }
     }
 
@@ -350,6 +379,7 @@ class AppWindow:
         'FLAME': FLAME_KEYPOINT_NAMES,
         'SUPR': SMPLX_NAMES,
         'STAR': SMPL_NAMES,
+        'ANNY': [],
     }
 
     JOINTS = None
@@ -634,10 +664,60 @@ class AppWindow:
         self._show_joint_labels = gui.Checkbox("Show joint labels")
         self._show_joint_labels.set_on_checked(self._on_show_joint_labels)
 
+        # ------- ANNY MODEL SETTINGS ------- #
+        self._anny_model = None
+        self._anny_self_intersection_module = None
+        self._anny_aux_geometry_names = []
+        self._anny_phenotype_values = {}
+        self._anny_local_change_values = {}
+
+        self._updating_anny_controls = False
+
+        # Auswahl Model_Types
+        self._anny_model_type = gui.Combobox()
+        for model_type in AppWindow.ANNY_MODEL_TYPES:
+            self._anny_model_type.add_item(model_type)
+        # Auswahl RIGS
+        self._anny_rig = gui.Combobox()
+        for rig in AppWindow.ANNY_RIGS:
+            self._anny_rig.add_item(rig)
+
+        # schauen wie sinnvoll das ist umzusetzen
+        self._anny_show_bones = gui.Checkbox("Show Anny bones")
+        self._anny_show_self_intersections = gui.Checkbox("Show self intersections")
+        self._anny_extrapolate_phenotypes = gui.Checkbox("Extrapolate phenotypes")
+        self._anny_description = gui.Label("")
+        self._anny_measurements = gui.Label("")
+
+        # Auswahl Phenotypes
+        self._anny_phenotype = gui.Combobox()
+        self._anny_phenotype_val = gui.Slider(gui.Slider.DOUBLE)
+        self._anny_phenotype_val.set_limits(0.0, 1.0)
+        self._anny_reset_shape = gui.Button("Reset Anny shape")
+
+        # Lokale Änderungen -> muss irgendwie verbunden werden mit Phenotypes oder so wie in der demo
+        self._anny_local_change = gui.Combobox()
+        self._anny_local_change_val = gui.Slider(gui.Slider.DOUBLE)
+        self._anny_local_change_val.set_limits(-1.0, 1.0)
+
         self._on_body_model(AppWindow.BODY_MODEL_NAMES[0], 0)
         # self._on_body_pose_comp(list(AppWindow.POSE_PARAMS[AppWindow.BODY_MODEL_NAMES[0]].keys())[0], 0)
         self._body_model.set_on_selection_changed(self._on_body_model)
         self._body_model_gender.set_on_selection_changed(self._on_body_model_gender)
+
+        # Verbindet die neuen Anny-Widgets mit ihren Callbacks. Jede Aenderung
+        # an Topologie, Rig, Phenotype, Local Change oder Zusatzanzeige fuehrt
+        # am Ende zu ⁠ _reload_anny() ⁠.
+        self._anny_model_type.set_on_selection_changed(self._on_anny_model_type)
+        self._anny_rig.set_on_selection_changed(self._on_anny_rig)
+        self._anny_show_bones.set_on_checked(self._on_anny_show_bones)
+        self._anny_show_self_intersections.set_on_checked(self._on_anny_show_self_intersections)
+        self._anny_extrapolate_phenotypes.set_on_checked(self._on_anny_extrapolate_phenotypes)
+        self._anny_phenotype.set_on_selection_changed(self._on_anny_phenotype)
+        self._anny_phenotype_val.set_on_value_changed(self._on_anny_phenotype_val)
+        self._anny_local_change.set_on_selection_changed(self._on_anny_local_change)
+        self._anny_local_change_val.set_on_value_changed(self._on_anny_local_change_val)
+        self._anny_reset_shape.set_on_clicked(self._on_anny_reset_shape)
 
         self._body_beta_val.set_on_value_changed(self._on_body_beta_val)
         self._body_beta_reset.set_on_clicked(self._on_body_beta_reset)
@@ -725,6 +805,21 @@ class AppWindow:
         # h.add_child(gui.VectorEdit())
         self.model_settings.add_child(h)
 
+        # hier anny zeug
+        anny_grid = gui.VGrid(2, 0.25 * em)
+        anny_grid.add_child(gui.Label("Pose comp:"))
+        anny_grid.add_child(self._body_pose_comp)
+        anny_grid.add_child(gui.Label("Joint id:"))
+        anny_grid.add_child(self._body_pose_joint)
+        anny_grid.add_child(gui.Label("rot_x"))
+        anny_grid.add_child(self._body_pose_joint_x)
+        anny_grid.add_child(gui.Label("rot_y"))
+        anny_grid.add_child(self._body_pose_joint_y)
+        anny_grid.add_child(gui.Label("rot_z"))
+        anny_grid.add_child(self._body_pose_joint_z)
+        self.anny_settings.add_child(anny_grid)
+
+
         self._settings_panel.add_fixed(separation_height)
         self._settings_panel.add_child(self.model_settings)
 
@@ -736,6 +831,11 @@ class AppWindow:
         self.joint_labels_3d_list = []
         # self.joint_label_3d.visible = False
         # ----
+
+        # ----------------------------------- #
+        # ------- ANNY SETTINGS ------- #
+        # ----------------------------------- #
+
 
         # Normally our user interface can be children of all one layout (usually
         # a vertical layout), which is then the only child of the window. In our
@@ -1471,6 +1571,9 @@ class AppWindow:
                     extra_params['use_face_contour'] = True
                 if body_model == 'STAR':
                     model = STAR(gender=gender.lower())
+                elif body_model == 'ANNY':
+                    model = create_model()
+                    AppWindow.PRELOADED_BODY_MODELS['default'] = model # anny hat erstmal kein gender
                 else:
                     try:
                         model = eval(body_model.upper())(f'data/body_models/{body_model.lower()}', **extra_params)
@@ -1488,13 +1591,21 @@ class AppWindow:
 
         model = AppWindow.PRELOADED_BODY_MODELS[f'{body_model.lower()}-{gender.lower()}']
 
+        if body_model.lower() == 'anny':
+            # irgendwie anders mit dem gender umgehen
+            model_output = model(
+                pose_parameters=None,
+                phenotype_kwargs={},
+                local_changes_kwargs={},
+                pose_parameterization=None,
+                return_bone_ends=False
+            )
+
         input_params = copy.deepcopy(AppWindow.POSE_PARAMS[body_model])
 
 
         for k, v in input_params.items():
             input_params[k] = v.reshape(1, -1)
-
-        #import ipdb; ipdb.set_trace()
 
         model_output = model(
             betas=self._body_beta_tensor,
