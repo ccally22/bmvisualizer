@@ -670,17 +670,22 @@ class AppWindow:
         #self._anny_aux_geometry_names = []
         #self._anny_phenotype_values = {}
         #self._anny_local_change_values = {}
+        anny_settings = gui.CollapsableVert("Anny Settings", 0.25 * em,
+                                         gui.Margins(em, 0, 0, 0))
+        # funktioniert nicht, aber man will ja sowieso das es sich nur öffnet sobald anny bei den body models ausgewählt wird
 
+        anny_settings.set_is_open(False)
         #self._updating_anny_controls = False
-
+        #self.anny_settings = gui.CollapsableVert("Anny Settings", 0,
+        #                                          gui.Margins(em, 0, 0, 0))
         # Auswahl Model_Types
-        #self._anny_model_type = gui.Combobox()
-        #for model_type in AppWindow.ANNY_MODEL_TYPES:
-        #    self._anny_model_type.add_item(model_type)
+        self._anny_model_type = gui.Combobox()
+        for model_type in AppWindow.ANNY_MODEL_TYPES:
+            self._anny_model_type.add_item(model_type)
         # Auswahl RIGS
-        #self._anny_rig = gui.Combobox()
-        #for rig in AppWindow.ANNY_RIGS:
-        #    self._anny_rig.add_item(rig)
+        self._anny_rig = gui.Combobox()
+        for rig in AppWindow.ANNY_RIGS:
+            self._anny_rig.add_item(rig)
 
         # schauen wie sinnvoll das ist umzusetzen
         #self._anny_show_bones = gui.Checkbox("Show Anny bones")
@@ -690,20 +695,20 @@ class AppWindow:
         #self._anny_measurements = gui.Label("")
 
         # Auswahl Phenotypes
-        #self._anny_phenotype = gui.Combobox()
-        #self._anny_phenotype_val = gui.Slider(gui.Slider.DOUBLE)
-        #self._anny_phenotype_val.set_limits(0.0, 1.0)
-        #self._anny_reset_shape = gui.Button("Reset Anny shape")
+        self._anny_phenotype = gui.Combobox()
+        self._anny_phenotype_val = gui.Slider(gui.Slider.DOUBLE)
+        self._anny_phenotype_val.set_limits(0.0, 1.0)
+        self._anny_reset_shape = gui.Button("Reset Anny shape")
 
         # Lokale Änderungen -> muss irgendwie verbunden werden mit Phenotypes oder so wie in der demo
         #self._anny_local_change = gui.Combobox()
         #self._anny_local_change_val = gui.Slider(gui.Slider.DOUBLE)
         #self._anny_local_change_val.set_limits(-1.0, 1.0)
 
-        #self._on_body_model(AppWindow.BODY_MODEL_NAMES[0], 0)
-        # self._on_body_pose_comp(list(AppWindow.POSE_PARAMS[AppWindow.BODY_MODEL_NAMES[0]].keys())[0], 0)
-        #self._body_model.set_on_selection_changed(self._on_body_model)
-        #self._body_model_gender.set_on_selection_changed(self._on_body_model_gender)
+        self._on_body_model(AppWindow.BODY_MODEL_NAMES[0], 0)
+        self._on_body_pose_comp(list(AppWindow.POSE_PARAMS[AppWindow.BODY_MODEL_NAMES[0]].keys())[0], 0)
+        self._body_model.set_on_selection_changed(self._on_body_model)
+        self._body_model_gender.set_on_selection_changed(self._on_body_model_gender)
 
         # Verbindet die neuen Anny-Widgets mit ihren Callbacks. Jede Aenderung
         # an Topologie, Rig, Phenotype, Local Change oder Zusatzanzeige fuehrt
@@ -1585,6 +1590,7 @@ class AppWindow:
     # @torch.no_grad()
     def load_body_model(self, body_model='smpl', gender='neutral'):
         self._scene.scene.remove_geometry("__body_model__")
+        model = AppWindow.PRELOADED_BODY_MODELS[f'{body_model.lower()}-{gender.lower()}']
 
         if body_model.lower() == 'anny':
             model_output = model(
@@ -1596,8 +1602,6 @@ class AppWindow:
             )
 
         else:
-            model = AppWindow.PRELOADED_BODY_MODELS[f'{body_model.lower()}-{gender.lower()}']
-
             # input eingaben
             input_params = copy.deepcopy(AppWindow.POSE_PARAMS[body_model])
 
@@ -1612,31 +1616,32 @@ class AppWindow:
             )
 
 
-            verts = model_output.vertices[0].detach().numpy()
-            AppWindow.JOINTS = model_output.joints[0].detach().numpy()
-            faces = model.faces
+        verts = model_output.vertices[0].detach().numpy()
+        AppWindow.JOINTS = model_output.joints[0].detach().numpy()
+        faces = model.faces
 
-            # bauen des 3D-Mesh
-            mesh = o3d.geometry.TriangleMesh()
+        # bauen des 3D-Mesh
+        mesh = o3d.geometry.TriangleMesh()
 
-            mesh.vertices = o3d.utility.Vector3dVector(verts)
-            mesh.triangles = o3d.utility.Vector3iVector(faces)
-            mesh.compute_vertex_normals()
-            mesh.paint_uniform_color([0.5, 0.5, 0.5])
+        mesh.vertices = o3d.utility.Vector3dVector(verts)
+        mesh.triangles = o3d.utility.Vector3iVector(faces)
+        mesh.compute_vertex_normals()
+        mesh.paint_uniform_color([0.5, 0.5, 0.5])
 
-            # laden des fertigen neuen Mesh und kleine Anpassungen
-            min_y = -mesh.get_min_bound()[1]
-            mesh.translate([0, min_y, 0])
-            AppWindow.JOINTS += np.array([0, min_y, 0])
+        # laden des fertigen neuen Mesh und kleine Anpassungen
+        min_y = -mesh.get_min_bound()[1]
+        mesh.translate([0, min_y, 0])
+        AppWindow.JOINTS += np.array([0, min_y, 0])
 
-            self._scene.scene.add_geometry("__body_model__", mesh,
-                                           self.settings.material)
-            bounds = mesh.get_axis_aligned_bounding_box()
-            if AppWindow.CAM_FIRST:
-                self._scene.setup_camera(60, bounds, bounds.get_center())
-                AppWindow.CAM_FIRST = False
-            AppWindow.BODY_TRANSL = torch.tensor([[0, min_y, 0]])
-            self._on_show_joints(self._show_joints.checked)
+        self._scene.scene.add_geometry("__body_model__", mesh,
+                                        self.settings.material)
+        bounds = mesh.get_axis_aligned_bounding_box()
+        if AppWindow.CAM_FIRST:
+            self._scene.setup_camera(60, bounds, bounds.get_center())
+            AppWindow.CAM_FIRST = False
+
+        AppWindow.BODY_TRANSL = torch.tensor([[0, min_y, 0]])
+        self._on_show_joints(self._show_joints.checked)
 
     def load(self, path):
         # self._scene.scene.clear_geometry()
