@@ -276,6 +276,7 @@ class AppWindow:
         'SMPL': {
             'body_pose': torch.zeros(1, 23, 3),
             'global_orient': torch.zeros(1, 1, 3),
+            'trans': torch.zeros(1, 1, 3),
         },
         'SMPLX': {
             'body_pose': torch.zeros(1, 21, 3),
@@ -285,10 +286,12 @@ class AppWindow:
             'jaw_pose': torch.zeros(1, 1, 3),
             'leye_pose': torch.zeros(1, 1, 3),
             'reye_pose': torch.zeros(1, 1, 3),
+            'trans': torch.zeros(1, 1, 3),
         },
         'MANO': {
             'hand_pose': torch.zeros(1, 15, 3),
             'global_orient': torch.zeros(1, 1, 3),
+            'trans': torch.zeros(1, 1, 3),
         },
         'FLAME': {
             'global_orient': torch.zeros(1, 1, 3),
@@ -296,6 +299,7 @@ class AppWindow:
             'neck_pose': torch.zeros(1, 1, 3),
             'leye_pose': torch.zeros(1, 1, 3),
             'reye_pose': torch.zeros(1, 1, 3),
+            'trans': torch.zeros(1, 1, 3),
         },
         'SUPR': {
             'pose': torch.zeros(1, 75, 3),
@@ -628,6 +632,20 @@ class AppWindow:
         self._body_pose_reset = gui.Button("Reset pose")
         self._body_pose_ik = gui.Button("Run IK")
 
+        # new global translation gui slider
+
+        self._trans_x = gui.Slider(gui.Slider.DOUBLE)
+        self._trans_x.set_limits(-5.0, 5.0)
+
+        self._trans_y = gui.Slider(gui.Slider.DOUBLE)
+        self._trans_y.set_limits(-5.0, 5.0)
+
+        self._trans_z = gui.Slider(gui.Slider.DOUBLE)
+        self._trans_z.set_limits(-5.0, 5.0)
+
+        self._trans_reset = gui.Button("Reset translation")
+
+        # hier ende
         self._show_joints = gui.Checkbox("Show joints")
         self._show_joints.set_on_checked(self._on_show_joints)
 
@@ -655,6 +673,13 @@ class AppWindow:
         self._body_pose_reset.set_on_clicked(self._on_body_pose_reset)
 
         self._body_pose_ik.set_on_clicked(self._on_run_ik)
+
+        # !new! callback registrieren whatever that means
+        self._trans_x.set_on_value_changed(self._on_trans_x)
+        self._trans_y.set_on_value_changed(self._on_trans_y)
+        self._trans_z.set_on_value_changed(self._on_trans_z)
+
+        self._trans_reset.set_on_clicked(self._on_trans_reset)
 
         self._scene.set_on_mouse(self._on_mouse_widget)
         self._scene.set_on_key(self._on_key_widget)
@@ -724,6 +749,30 @@ class AppWindow:
         h.add_child(self._body_pose_ik)
         # h.add_child(gui.VectorEdit())
         self.model_settings.add_child(h)
+
+        # new global translation UI
+
+        h = gui.Horiz(0.25 * em)
+        h.add_child(gui.Label("Global Translation"))
+        self.model_settings.add_child(h)
+
+        grid = gui.VGrid(2, 0.25 * em)
+
+        grid.add_child(gui.Label("Translate X"))
+        grid.add_child(self._trans_x)
+
+        grid.add_child(gui.Label("Translate Y"))
+        grid.add_child(self._trans_y)
+
+        grid.add_child(gui.Label("Translate Z"))
+        grid.add_child(self._trans_z)
+
+        self.model_settings.add_child(grid)
+
+        h = gui.Horiz(0.25 * em)
+        h.add_child(self._trans_reset)
+        self.model_settings.add_child(h)
+        # new end
 
         self._settings_panel.add_fixed(separation_height)
         self._settings_panel.add_child(self.model_settings)
@@ -1036,8 +1085,14 @@ class AppWindow:
             self._body_model_gender.add_item(gender)
 
         self._body_pose_comp.clear_items()
+        ## kein trans in Pose-Auswahl mehr?
+       # for k in AppWindow.POSE_PARAMS[name].keys():
+       #     self._body_pose_comp.add_item(k)
         for k in AppWindow.POSE_PARAMS[name].keys():
-            self._body_pose_comp.add_item(k)
+            if k != "trans":
+                self._body_pose_comp.add_item(k)
+
+
 
         self._body_pose_joint.clear_items()
         joint_names = AppWindow.JOINT_NAMES[name][self._body_pose_comp.selected_text]
@@ -1047,6 +1102,20 @@ class AppWindow:
         self._reset_rot_sliders()
         AppWindow.SELECTED_JOINT = None
         self._on_show_joints(self._show_joints.checked)
+
+        # new to reset sliders? not sure if correct position in code
+        if "trans" in AppWindow.POSE_PARAMS[name]:
+
+            self._trans_x.double_value = \
+                AppWindow.POSE_PARAMS[name]["trans"][0,0,0].item()
+
+            self._trans_y.double_value = \
+                AppWindow.POSE_PARAMS[name]["trans"][0,0,1].item()
+
+            self._trans_z.double_value = \
+                AppWindow.POSE_PARAMS[name]["trans"][0,0,2].item()
+
+            # new end
 
     def _on_body_model_gender(self, name, index):
         logger.info(f"Changing {self._body_model.selected_text} body model gender to {name}-{index}")
@@ -1314,6 +1383,75 @@ class AppWindow:
         self._body_pose_joint_y.int_value = 0
         self._body_pose_joint_z.int_value = 0
 
+
+    # NEW GLOBAL TRANSLATION
+    def _on_trans_x(self, val):
+
+        bm = self._body_model.selected_text
+
+        if "trans" not in AppWindow.POSE_PARAMS[bm]:
+            return
+
+        AppWindow.POSE_PARAMS[bm]["trans"][0, 0, 0] = val
+
+        self.load_body_model(
+            self._body_model.selected_text,
+            gender=self._body_model_gender.selected_text,
+        )
+
+
+    def _on_trans_y(self, val):
+
+        bm = self._body_model.selected_text
+
+        if "trans" not in AppWindow.POSE_PARAMS[bm]:
+            return
+
+        AppWindow.POSE_PARAMS[bm]["trans"][0, 0, 1] = val
+
+        self.load_body_model(
+            self._body_model.selected_text,
+            gender=self._body_model_gender.selected_text,
+        )
+
+
+    def _on_trans_z(self, val):
+
+        bm = self._body_model.selected_text
+
+        if "trans" not in AppWindow.POSE_PARAMS[bm]:
+            return
+
+        AppWindow.POSE_PARAMS[bm]["trans"][0, 0, 2] = val
+
+        self.load_body_model(
+            self._body_model.selected_text,
+            gender=self._body_model_gender.selected_text,
+        )
+
+
+    def _on_trans_reset(self):
+
+        bm = self._body_model.selected_text
+
+        if "trans" not in AppWindow.POSE_PARAMS[bm]:
+            return
+
+        AppWindow.POSE_PARAMS[bm]["trans"] = torch.zeros_like(
+            AppWindow.POSE_PARAMS[bm]["trans"]
+        )
+
+        self._trans_x.double_value = 0.0
+        self._trans_y.double_value = 0.0
+        self._trans_z.double_value = 0.0
+
+        self.load_body_model(
+            self._body_model.selected_text,
+            gender=self._body_model_gender.selected_text,
+        )
+
+    # NEW END
+
     def _on_material_prefab(self, name, index):
         self.settings.apply_material_prefab(name)
         self.settings.apply_material = True
@@ -1496,6 +1634,10 @@ class AppWindow:
 
         #import ipdb; ipdb.set_trace()
 
+        if body_model in ["SMPL", "SMPLX", "MANO", "FLAME"] and "trans" in input_params:
+            # SMPL-family models use 'transl' instead of 'trans'
+            input_params["transl"] = input_params.pop("trans")
+
         model_output = model(
             betas=self._body_beta_tensor,
             #expression=self._body_exp_tensor,
@@ -1511,20 +1653,28 @@ class AppWindow:
 
         mesh.vertices = o3d.utility.Vector3dVector(verts)
         mesh.triangles = o3d.utility.Vector3iVector(faces)
+        
+        user_y = 0.0
+        if "trans" in AppWindow.POSE_PARAMS[body_model]:
+            user_y = AppWindow.POSE_PARAMS[body_model]["trans"][0, 0, 1].item()
+        # Remove user translation before computing ground offset.
+        # Otherwise Y translation would be cancelled by the floor alignment.
+        base_min_y = mesh.get_min_bound()[1] - user_y
+        ground_offset = -base_min_y
+
+        mesh.translate([0, ground_offset, 0])
+        AppWindow.JOINTS += np.array([0, ground_offset, 0])
         mesh.compute_vertex_normals()
         mesh.paint_uniform_color([0.5, 0.5, 0.5])
         
-        min_y = -mesh.get_min_bound()[1]
-        mesh.translate([0, min_y, 0])
-        AppWindow.JOINTS += np.array([0, min_y, 0])
-
+       
         self._scene.scene.add_geometry("__body_model__", mesh,
                                        self.settings.material)
         bounds = mesh.get_axis_aligned_bounding_box()
         if AppWindow.CAM_FIRST:
             self._scene.setup_camera(60, bounds, bounds.get_center())
             AppWindow.CAM_FIRST = False
-        AppWindow.BODY_TRANSL = torch.tensor([[0, min_y, 0]])
+        AppWindow.BODY_TRANSL = torch.tensor([[0, ground_offset, 0]])
         self._on_show_joints(self._show_joints.checked)
 
     def load(self, path):
