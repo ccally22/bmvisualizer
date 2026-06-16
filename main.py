@@ -1590,9 +1590,9 @@ class AppWindow:
     # @torch.no_grad()
     def load_body_model(self, body_model='smpl', gender='neutral'):
         self._scene.scene.remove_geometry("__body_model__")
-        model = AppWindow.PRELOADED_BODY_MODELS[f'{body_model.lower()}-{gender.lower()}']
 
         if body_model.lower() == 'anny':
+            model = AppWindow.PRELOADED_BODY_MODELS['anny']
             model_output = model(
                 pose_parameters=None,
                 phenotype_kwargs={},
@@ -1600,8 +1600,15 @@ class AppWindow:
                 pose_parameterization=None,
                 return_bone_ends=False
             )
+            # anny gibt dictionary zurück keine Objekte, deshalb muss man anders darauf zugreifen
+            verts = model_output["vertices"].squeeze(0).detach().numpy()
+            # die joints werden bei anny unter rest_bone_heads gespeichert
+            AppWindow.JOINTS = model_output["rest_bone_heads"].squeeze(0).detach().numpy()
+            # torch tensor der noch konvertiert werden muss zu numpy array
+            faces = model.get_triangular_faces().cpu().numpy().astype(np.int32)
 
         else:
+            model = AppWindow.PRELOADED_BODY_MODELS[f'{body_model.lower()}-{gender.lower()}']
             # input eingaben
             input_params = copy.deepcopy(AppWindow.POSE_PARAMS[body_model])
 
@@ -1614,11 +1621,9 @@ class AppWindow:
                 #expression=self._body_exp_tensor,
                 **input_params,
             )
-
-
-        verts = model_output.vertices[0].detach().numpy()
-        AppWindow.JOINTS = model_output.joints[0].detach().numpy()
-        faces = model.faces
+            verts = model_output.vertices[0].detach().numpy()
+            AppWindow.JOINTS = model_output.joints[0].detach().numpy()
+            faces = model.faces
 
         # bauen des 3D-Mesh
         mesh = o3d.geometry.TriangleMesh()
