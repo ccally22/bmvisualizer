@@ -39,7 +39,7 @@ from loguru import logger
 import open3d.visualization.gui as gui
 import scipy.spatial.transform.rotation as R
 import open3d.visualization.rendering as rendering
-
+import roma
 # import supr as SUPR
 from SUPR.supr.pytorch.supr import SUPR
 
@@ -1631,6 +1631,11 @@ class AppWindow:
         mesh.vertices = o3d.utility.Vector3dVector(verts)
         mesh.triangles = o3d.utility.Vector3iVector(faces)
         mesh.compute_vertex_normals()
+        if body_model.lower() == 'anny':
+            R = roma.euler_to_rotmat('x', [270.], degrees=True)
+            mesh.rotate(R, center=(0, 0, 0))
+            #mesh.translate([0, -5, 0])
+            mesh.compute_vertex_normals()
         mesh.paint_uniform_color([0.5, 0.5, 0.5])
 
         # laden des fertigen neuen Mesh und kleine Anpassungen
