@@ -64,7 +64,8 @@ from utils import (
     SMPL_NAMES,
     SMPLX_NAMES,
     MANO_NAMES,
-    STAR_NAMES
+    STAR_NAMES,
+    BONE_NAMES
 )
 from simple_ik import simple_ik_solver
 
@@ -325,9 +326,8 @@ class AppWindow:
             #'betas': torch.zeros(1, 10), # not sure!!!!!
             'trans': torch.zeros(1, 1, 3),
         },
-        # erstmal nichts
         'ANNY' : {
-            'pose': torch.zeros(1, 0, 3),
+            'pose': torch.zeros(1, 163, 3),
             'trans': torch.zeros(1, 0, 3),
         }
     }
@@ -367,7 +367,7 @@ class AppWindow:
         },
         # erstmal nichts
         'ANNY': {
-            'pose': [],
+            'pose': BONE_NAMES,
             'trans': []
         }
     }
@@ -1606,6 +1606,7 @@ class AppWindow:
             AppWindow.JOINTS = model_output["rest_bone_heads"].squeeze(0).detach().numpy()
             # torch tensor der noch konvertiert werden muss zu numpy array
             faces = model.get_triangular_faces().cpu().numpy().astype(np.int32)
+            print(model.bone_labels)
 
         else:
             model = AppWindow.PRELOADED_BODY_MODELS[f'{body_model.lower()}-{gender.lower()}']
