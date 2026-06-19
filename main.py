@@ -365,7 +365,6 @@ class AppWindow:
             'pose': STAR_NAMES,  # doch smpl
             'trans': ["pelvis"]
         },
-        # erstmal nichts
         'ANNY': {
             'pose': BONE_NAMES,
             'trans': []
@@ -1185,7 +1184,7 @@ class AppWindow:
         ji = int(self._body_pose_joint.selected_text.split('-')[0])
         euler_angle = [val, self._body_pose_joint_y.int_value, self._body_pose_joint_z.int_value]
         axis_angle = R.Rotation.from_euler('xyz', euler_angle, degrees=True).as_rotvec()
-        AppWindow.POSE_PARAMS[bm][bp][0, ji] = torch.from_numpy(axis_angle)
+        AppWindow.POSE_PARAMS[bm][bp][0, ji] = torch.from_numpy(axis_angle).float()
 
         self.load_body_model(
             self._body_model.selected_text,
@@ -1199,7 +1198,7 @@ class AppWindow:
         ji = int(self._body_pose_joint.selected_text.split('-')[0])
         euler_angle = [self._body_pose_joint_x.int_value, val, self._body_pose_joint_z.int_value]
         axis_angle = R.Rotation.from_euler('xyz', euler_angle, degrees=True).as_rotvec()
-        AppWindow.POSE_PARAMS[bm][bp][0, ji] = torch.from_numpy(axis_angle)
+        AppWindow.POSE_PARAMS[bm][bp][0, ji] = torch.from_numpy(axis_angle).float()
 
         self.load_body_model(
             self._body_model.selected_text,
@@ -1213,7 +1212,7 @@ class AppWindow:
         ji = int(self._body_pose_joint.selected_text.split('-')[0])
         euler_angle = [self._body_pose_joint_x.int_value, self._body_pose_joint_y.int_value, val]
         axis_angle = R.Rotation.from_euler('xyz', euler_angle, degrees=True).as_rotvec()
-        AppWindow.POSE_PARAMS[bm][bp][0, ji] = torch.from_numpy(axis_angle)
+        AppWindow.POSE_PARAMS[bm][bp][0, ji] = torch.from_numpy(axis_angle).float()
 
         self.load_body_model(
             self._body_model.selected_text,
@@ -1592,9 +1591,21 @@ class AppWindow:
         self._scene.scene.remove_geometry("__body_model__")
 
         if body_model.lower() == 'anny':
+            # parameter von der gui
+            input_params = copy.deepcopy(AppWindow.POSE_PARAMS[body_model])
+
+            # ohne den ersten 1 teil (der immer gleich ist):
+            rotvec = input_params['pose'][0]
+            # erstellt die rotationsmatrix
+            bones_rotmat = roma.rotvec_to_rotmat(rotvec)
+            # rotation + translation = 0 + der erste teil wird wieder hinzugefügt
+            pose_parameters = roma.Rigid(
+                bones_rotmat, torch.zeros((len(bones_rotmat), 3), dtype=torch.float64)
+            )[None].to_homogeneous()
+
             model = AppWindow.PRELOADED_BODY_MODELS['anny']
             model_output = model(
-                pose_parameters=None,
+                pose_parameters=pose_parameters,
                 phenotype_kwargs={},
                 local_changes_kwargs={},
                 pose_parameterization=None,
@@ -1606,7 +1617,6 @@ class AppWindow:
             AppWindow.JOINTS = model_output["rest_bone_heads"].squeeze(0).detach().numpy()
             # torch tensor der noch konvertiert werden muss zu numpy array
             faces = model.get_triangular_faces().cpu().numpy().astype(np.int32)
-            print(model.bone_labels)
 
         else:
             model = AppWindow.PRELOADED_BODY_MODELS[f'{body_model.lower()}-{gender.lower()}']
