@@ -286,7 +286,16 @@ class AppWindow:
         'FLAME': 10,
         'SUPR': 10,
         'STAR': 10,
-        'ANNY': 0
+        'ANNY': 6 # ?? gender, age, muscle, weight, height,proportions
+    }
+    ANNY_PHENOTYPE_NAMES = ["gender", "age", "muscle", "weight", "height", "proportions"]
+    ANNY_PHENOTYPE_DEFAULTS = {
+        "gender": 0.5,
+        "age": 0.5,
+        "muscle": 0.5,
+        "weight": 0.5,
+        "height": 0.5,
+        "proportions": 0.5,
     }
     CAM_FIRST = True
 
@@ -621,6 +630,7 @@ class AppWindow:
         self._body_beta_val = gui.Slider(gui.Slider.DOUBLE)
         self._body_beta_val.set_limits(-5.0, 5.0)
         self._body_beta_tensor = torch.zeros(1, 10)
+        self._anny_phenotype_values = dict(AppWindow.ANNY_PHENOTYPE_DEFAULTS) #??
         self._body_beta_reset = gui.Button("Reset betas")
 
         self._body_beta_text = gui.Label("Betas")
@@ -695,6 +705,8 @@ class AppWindow:
 
         # Auswahl Phenotypes
         self._anny_phenotype = gui.Combobox()
+        for name in AppWindow.ANNY_PHENOTYPE_NAMES:
+            self._anny_phenotype.add_item(name)
         self._anny_phenotype_val = gui.Slider(gui.Slider.DOUBLE)
         self._anny_phenotype_val.set_limits(0.0, 1.0)
         self._anny_reset_shape = gui.Button("Reset Anny shape")
@@ -717,11 +729,11 @@ class AppWindow:
         #self._anny_show_bones.set_on_checked(self._on_anny_show_bones)
         #self._anny_show_self_intersections.set_on_checked(self._on_anny_show_self_intersections)
         #self._anny_extrapolate_phenotypes.set_on_checked(self._on_anny_extrapolate_phenotypes)
-        #self._anny_phenotype.set_on_selection_changed(self._on_anny_phenotype)
-        #self._anny_phenotype_val.set_on_value_changed(self._on_anny_phenotype_val)
+        self._anny_phenotype.set_on_selection_changed(self._on_anny_phenotype_comp)
+        self._anny_phenotype_val.set_on_value_changed(self._on_anny_phenotype_val)
         #self._anny_local_change.set_on_selection_changed(self._on_anny_local_change)
         #self._anny_local_change_val.set_on_value_changed(self._on_anny_local_change_val)
-        #self._anny_reset_shape.set_on_clicked(self._on_anny_reset_shape)
+        self._anny_reset_shape.set_on_clicked(self._on_anny_reset_shape)
 
         #################################################################################
 
@@ -812,6 +824,7 @@ class AppWindow:
         self.model_settings.add_child(h)
 
 
+
         anny_grid = gui.VGrid(2, 0.25 * em)
         anny_grid.add_child(gui.Label("Pose comp:"))
         anny_grid.add_child(self._body_pose_comp)
@@ -828,6 +841,7 @@ class AppWindow:
 
         self._settings_panel.add_fixed(separation_height)
         self._settings_panel.add_child(self.model_settings)
+
 
         # Info panel
         self.info = gui.Label("")
@@ -1131,6 +1145,22 @@ class AppWindow:
         self._body_beta_val.double_value = 0.0
         AppWindow.CAM_FIRST = True
         self.load_body_model(name)
+
+# treat anny phenotypes like smpl betas
+        self._body_model_shape_comp.clear_items()
+
+        if name == "ANNY":
+            for phenotype in AppWindow.ANNY_PHENOTYPE_NAMES:
+                self._body_model_shape_comp.add_item(phenotype)
+            self._body_beta_val.set_limits(0.0, 1.0)
+            self._body_beta_val.double_value = self._anny_phenotype_values[AppWindow.ANNY_PHENOTYPE_NAMES[0]]
+
+        else:
+            for i in range(AppWindow.BODY_MODEL_N_BETAS[name]):
+                self._body_model_shape_comp.add_item(f"{i+1:02d}")
+            self._body_beta_val.set_limits(-5.0, 5.0)
+            self._body_beta_val.double_value = 0.0
+
         self._body_model_gender.clear_items()
 
         for gender in AppWindow.BODY_MODEL_GENDERS[name]:
@@ -1158,8 +1188,12 @@ class AppWindow:
         # self._apply_settings()
 
     def _on_body_beta_val(self, val):
-        self._body_beta_tensor[0, int(self._body_model_shape_comp.selected_text)-1] = float(val)
-        self._body_beta_text.text = f",".join(f'{x:.1f}' for x in self._body_beta_tensor[0].numpy().tolist())
+        if self._body_model.selected_text == 'ANNY':
+            name = self._body_model_shape_comp.selected_text
+            self._anny_phenotype_values[name] = float(val)
+        else:
+            self._body_beta_tensor[0, int(self._body_model_shape_comp.selected_text)-1] = float(val)
+            self._body_beta_text.text = f",".join(f'{x:.1f}' for x in self._body_beta_tensor[0].numpy().tolist())
         self.load_body_model(
             self._body_model.selected_text,
             gender=self._body_model_gender.selected_text,
@@ -1221,7 +1255,10 @@ class AppWindow:
         # self._on_show_joints(self._show_joints.checked)
 
     def _on_body_model_shape_comp(self, name, index):
-        self._body_beta_val.double_value = self._body_beta_tensor[0, index].item()
+        if self._body_model.selected_text == 'ANNY':
+            self._body_beta_val.double_value = self._anny_phenotype_values.get(name, 0.5)
+        else:
+            self._body_beta_val.double_value = self._body_beta_tensor[0, index].item()
 
     def _on_body_model_exp_comp(self, name, index):
         self._body_exp_val.double_value = self._body_exp_tensor[0, index].item()
@@ -1234,13 +1271,36 @@ class AppWindow:
         self._reset_rot_sliders()
 
     def _on_body_beta_reset(self):
-        self._body_beta_tensor = torch.zeros(1, 10)
-        self._body_beta_text.text = f",".join(f'{x:.1f}' for x in self._body_beta_tensor[0].numpy().tolist())
-        self._body_beta_val.double_value = 0.0
+        if self._body_model.selected_text == 'ANNY':
+            self._anny_phenotype_values = dict(AppWindow.ANNY_PHENOTYPE_DEFAULTS)
+            self._body_beta_val.double_value = self._anny_phenotype_values[
+            self._body_model_shape_comp.selected_text
+        ]
+        else:
+            self._body_beta_tensor = torch.zeros(1, 10)
+            self._body_beta_text.text = f",".join(f'{x:.1f}' for x in self._body_beta_tensor[0].numpy().tolist())
+            self._body_beta_val.double_value = 0.0
         self.load_body_model(
-            self._body_model.selected_text,
-            gender=self._body_model_gender.selected_text,
-        )
+                self._body_model.selected_text,
+                gender=self._body_model_gender.selected_text,
+            )
+
+    def _on_anny_phenotype_comp(self, name, index):
+        self._anny_phenotype_val.double_value = self._anny_phenotype_values[name]
+
+    def _on_anny_phenotype_val(self, val):
+        name = self._anny_phenotype.selected_text
+        self._anny_phenotype_values[name] = float(val)
+        if self._body_model.selected_text == 'ANNY':
+            self.load_body_model('ANNY')
+
+    def _on_anny_reset_shape(self):
+        self._anny_phenotype_values = dict(AppWindow.ANNY_PHENOTYPE_DEFAULTS)
+        self._anny_phenotype_val.double_value = self._anny_phenotype_values[
+            self._anny_phenotype.selected_text
+        ]
+        if self._body_model.selected_text == 'ANNY':
+            self.load_body_model('ANNY')
 
     def _on_body_exp_reset(self):
         self._body_exp_tensor = torch.zeros(1, 10)
@@ -1606,7 +1666,7 @@ class AppWindow:
             model = AppWindow.PRELOADED_BODY_MODELS['anny']
             model_output = model(
                 pose_parameters=pose_parameters,
-                phenotype_kwargs={},
+                phenotype_kwargs=self._anny_phenotype_values,
                 local_changes_kwargs={},
                 pose_parameterization=None,
                 return_bone_ends=False
