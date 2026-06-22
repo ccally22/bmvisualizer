@@ -121,4 +121,73 @@ class AnnyWrapper:
             self.n_bones = len(self.bone_labels)
             self.faces = self.anny_model.faces.detach().numpy()
 
+    def _convert_output(self, anny_output):
+        """
+        Convert ANNY's output dict into our AnnyOutput container
+        
+        ANNY returns a dict with:
+            'vertices':    Tensor [B, V, 3]    - mesh vertices (Z-up)
+            'bone_poses':  Tensor [B, N, 4, 4] - bone matrices (Z-up)
+            (and more, but we don't need the rest)
+        
+        We need:
+            output.vertices:   Tensor [B, V, 3]   - same shape, Y-up
+            output.joints:     Tensor [B, N, 3]   - only positions, Y-up
+        """
+        # Get the parts we need from ANNY's output dict
+        verts = anny_output['vertices']         # [B, V, 3]
+        bone_poses = anny_output['bone_poses']  # [B, N, 4, 4]
+        
+        # Extract joint positions from bone matrices (the shortcut!)
+        # bone_poses[..., :3, 3] = translation part of each 4x4 matrix
+        joints = bone_poses[..., :3, 3]          # [B, N, 3]
+        
+        # Convert from ANNY's Z-up to visualizer's Y-up
+        verts = self._z_up_to_y_up(verts)
+        joints = self._z_up_to_y_up(joints)
+        
+        # Make sure types are float32 (not float64) for compatibility
+        verts = verts.float()
+        joints = joints.float()
+        
+        # Pack into our SMPL-style container
+        return AnnyOutput(vertices=verts, joints=joints)
+
+    def _build_rig_pose(self, pose, trans):
+        """
+        Convert SMPL-style pose tensor + translation into ANNY's bone dictionary
+        
+        SMPL-style input:
+            pose:  Tensor [1, N*3]   axis-angle for each bone (flat)
+            trans: Tensor [1, 3]     translation for the root
+        
+        ANNY-style output:
+            dict {bone_name: 4x4 matrix}
+            - root bone: gets translation + rotation
+            - other bones: only rotation (translation = 0)
+        """
+        rig_pose = {}
+        
+        # Start with identity matrices for all bones
+        for bone_name in self.bone_labels:
+            rig_pose[bone_name] = torch.eye(4)
+        
+        # Add translation to the root bone (only if provided)
+        if trans is not None:
+            root_name = self.bone_labels[0]  # first bone is root
+            # trans has shape [1, 3] - flatten to [3]
+            rig_pose[root_name][:3, 3] = trans.flatten()[:3]
+        
+        # Add rotations to all bones (only if pose provided)
+        if pose is not None:
+            # pose has shape [1, N*3] - reshape to [N, 3]
+            pose_per_bone = pose.reshape(-1, 3)
+            
+            for i, bone_name in enumerate(self.bone_labels):
+                axis_angle = pose_per_bone[i]
+                rot_matrix = self._axis_angle_to_matrix(axis_angle)
+                rig_pose[bone_name][:3, :3] = rot_matrix
+        
+        return rig_pose
+
 
