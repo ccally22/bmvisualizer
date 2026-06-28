@@ -87,7 +87,7 @@ class AnnyWrapper:
         # Use scipy to do the Rodrigues conversion
         axis_angle_np = axis_angle.detach().numpy()
         rot_matrix = R.from_rotvec(axis_angle_np).as_matrix()
-        return torch.from_numpy(rot_matrix).float()
+        return torch.from_numpy(rot_matrix).double()
 
     def set_phenotypes(self, phenotypes_dict):
         """
@@ -162,32 +162,64 @@ class AnnyWrapper:
             trans: Tensor [1, 3]     translation for the root
         
         ANNY-style output:
-            dict {bone_name: 4x4 matrix}
+            dict {bone_name: 4x4 matrix} with shape [1, 4, 4] per bone
             - root bone: gets translation + rotation
             - other bones: only rotation (translation = 0)
         """
         rig_pose = {}
         
         # Start with identity matrices for all bones
+        # FIX: ANNY expects shape [batch_size, 4, 4], not [4, 4]
+        # → .unsqueeze(0) adds the batch dimension: [4,4] becomes [1,4,4]
         for bone_name in self.bone_labels:
-            rig_pose[bone_name] = torch.eye(4)
+            rig_pose[bone_name] = torch.eye(4, dtype=torch.float64).unsqueeze(0)
         
         # Add translation to the root bone (only if provided)
         if trans is not None:
-            root_name = self.bone_labels[0]  # first bone is root
-            # trans has shape [1, 3] - flatten to [3]
-            rig_pose[root_name][:3, 3] = trans.flatten()[:3]
+            root_name = self.bone_labels[0]
+            # FIX: matrix is now [1, 4, 4] - need [0, :3, 3] instead of [:3, 3]
+            #      to access through the batch dimension
+            rig_pose[root_name][0, :3, 3] = trans.flatten()[:3]
         
         # Add rotations to all bones (only if pose provided)
         if pose is not None:
-            # pose has shape [1, N*3] - reshape to [N, 3]
             pose_per_bone = pose.reshape(-1, 3)
             
             for i, bone_name in enumerate(self.bone_labels):
                 axis_angle = pose_per_bone[i]
                 rot_matrix = self._axis_angle_to_matrix(axis_angle)
-                rig_pose[bone_name][:3, :3] = rot_matrix
+                # FIX: matrix is now [1, 4, 4] - need [0, :3, :3] instead of [:3, :3]
+                rig_pose[bone_name][0, :3, :3] = rot_matrix
         
         return rig_pose
+
+    def __call__(self, betas=None, pose=None, trans=None, **kwargs):
+        """
+        Main entry point - called by main.py like model(...).
+        
+        Translates SMPL-style inputs to ANNY format, runs ANNY,
+        and converts the output back to SMPL-style.
+        
+        Args:
+            betas:  ignored (ANNY uses phenotypes instead, set via setter)
+            pose:   Tensor [1, N*3] - axis-angle rotations per bone
+            trans:  Tensor [1, 3]   - translation for the root
+            **kwargs: any extra arguments (ignored)
+        
+        Returns:
+            AnnyOutput with .vertices [1, V, 3] and .joints [1, N, 3]
+        """
+        # 1. Convert SMPL-style pose to ANNY-style bone dict
+        rig_pose = self._build_rig_pose(pose, trans)
+        
+        # 2. Call the actual ANNY model
+        anny_output = self.anny_model(
+            pose_parameters=rig_pose,
+            phenotype_kwargs=self.phenotypes,
+            local_changes_kwargs=self.local_changes,
+        )
+        
+        # 3. Convert ANNY's output to SMPL-style
+        return self._convert_output(anny_output)
 
 
