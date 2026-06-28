@@ -1189,6 +1189,7 @@ class AppWindow:
             self._expression_reset_row.visible = not is_anny
         if hasattr(self, "_anny_hierarchy_grid"):
             self._anny_hierarchy_grid.visible = is_anny
+        self.window.set_needs_layout()
 
     def _classify_anny_bone(self, bone_name):
         if bone_name.endswith(".L"):
