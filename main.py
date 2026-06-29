@@ -297,6 +297,17 @@ class AppWindow:
         "height": 0.5,
         "proportions": 0.5,
     }
+    ANNY_REGION_ORDER = [
+        "Root",
+        "Torso",
+        "Left Leg",
+        "Right Leg",
+        "Left Arm",
+        "Right Arm",
+        "Head & Face",
+        "Tongue",
+        "Other",
+    ]
     CAM_FIRST = True
 
     PRELOADED_BODY_MODELS = {}
@@ -711,6 +722,14 @@ class AppWindow:
         self._anny_phenotype_val.set_limits(0.0, 1.0)
         self._anny_reset_shape = gui.Button("Reset Anny shape")
 
+        self._anny_bone_hierarchy = self._build_anny_bone_hierarchy()
+        self._anny_visible_bones = []
+        self._updating_anny_hierarchy = False
+        self._anny_region = gui.Combobox()
+        self._anny_group = gui.Combobox()
+        self._anny_bone = gui.Combobox()
+        self._populate_anny_regions()
+
         # Lokale Änderungen -> muss irgendwie verbunden werden mit Phenotypes oder so wie in der demo
         #self._anny_local_change = gui.Combobox()
         #self._anny_local_change_val = gui.Slider(gui.Slider.DOUBLE)
@@ -734,6 +753,9 @@ class AppWindow:
         #self._anny_local_change.set_on_selection_changed(self._on_anny_local_change)
         #self._anny_local_change_val.set_on_value_changed(self._on_anny_local_change_val)
         self._anny_reset_shape.set_on_clicked(self._on_anny_reset_shape)
+        self._anny_region.set_on_selection_changed(self._on_anny_region)
+        self._anny_group.set_on_selection_changed(self._on_anny_group)
+        self._anny_bone.set_on_selection_changed(self._on_anny_bone)
 
         #################################################################################
 
@@ -776,16 +798,16 @@ class AppWindow:
         h.add_child(self._body_beta_reset)
         self.model_settings.add_child(h)
 
-        grid = gui.VGrid(2, 0.25 * em)
-        grid.add_child(gui.Label("Exp Component"))
-        grid.add_child(self._body_model_exp_comp)
-        grid.add_child(gui.Label("Exp val:"))
-        grid.add_child(self._body_exp_val)
-        self.model_settings.add_child(grid)
+        self._expression_grid = gui.VGrid(2, 0.25 * em)
+        self._expression_grid.add_child(gui.Label("Exp Component"))
+        self._expression_grid.add_child(self._body_model_exp_comp)
+        self._expression_grid.add_child(gui.Label("Exp val:"))
+        self._expression_grid.add_child(self._body_exp_val)
+        self.model_settings.add_child(self._expression_grid)
 
-        h = gui.Horiz(0.25 * em)  # row 2
-        h.add_child(self._body_exp_reset)
-        self.model_settings.add_child(h)
+        self._expression_reset_row = gui.Horiz(0.25 * em)  # row 2
+        self._expression_reset_row.add_child(self._body_exp_reset)
+        self.model_settings.add_child(self._expression_reset_row)
 
         h = gui.Horiz(0.25 * em)  # row 2
         h.add_child(self._show_joints)
@@ -823,6 +845,14 @@ class AppWindow:
         # h.add_child(gui.VectorEdit())
         self.model_settings.add_child(h)
 
+        self._anny_hierarchy_grid = gui.VGrid(2, 0.25 * em)
+        self._anny_hierarchy_grid.add_child(gui.Label("Anny Region"))
+        self._anny_hierarchy_grid.add_child(self._anny_region)
+        self._anny_hierarchy_grid.add_child(gui.Label("Anny Group"))
+        self._anny_hierarchy_grid.add_child(self._anny_group)
+        self._anny_hierarchy_grid.add_child(gui.Label("Anny Bone"))
+        self._anny_hierarchy_grid.add_child(self._anny_bone)
+        self.model_settings.add_child(self._anny_hierarchy_grid)
 
 
         anny_grid = gui.VGrid(2, 0.25 * em)
@@ -841,6 +871,7 @@ class AppWindow:
 
         self._settings_panel.add_fixed(separation_height)
         self._settings_panel.add_child(self.model_settings)
+        self._set_model_specific_ui_visibility(self._body_model.selected_text)
 
 
         # Info panel
@@ -1023,6 +1054,16 @@ class AppWindow:
         self.settings.show_ground = show
         self._apply_settings()
 
+    def _current_joint_display_names(self):
+        joints = AppWindow.JOINTS
+        joint_count = 0 if joints is None else joints.shape[0]
+        joint_names = list(AppWindow.KEYPOINT_NAMES[self._body_model.selected_text])
+        if self._body_model.selected_text == "ANNY":
+            joint_names = list(AppWindow.JOINT_NAMES["ANNY"]["pose"])
+        if len(joint_names) < joint_count:
+            joint_names.extend(str(i) for i in range(len(joint_names), joint_count))
+        return joint_names
+
     def _on_show_joint_labels(self, show):
         if hasattr(self, "joint_label_3d"):
             self._scene.remove_3d_label(self.joint_label_3d)
@@ -1030,9 +1071,9 @@ class AppWindow:
             for label3d in self.joint_labels_3d_list:
                 self._scene.remove_3d_label(label3d)
         if show:
-            joint_names = AppWindow.KEYPOINT_NAMES[self._body_model.selected_text]
+            joint_names = self._current_joint_display_names()
             try:
-                for i in range(len(joint_names)):
+                for i in range(AppWindow.JOINTS.shape[0]):
                     self.joint_labels_3d_list.append(
                         self._scene.add_3d_label(AppWindow.JOINTS[i], joint_names[i])
                     )
@@ -1154,11 +1195,195 @@ class AppWindow:
         self.settings.set_material(AppWindow.MATERIAL_SHADERS[index])
         self._apply_settings()
 
+    def _set_model_specific_ui_visibility(self, body_model_name):
+        is_anny = body_model_name == "ANNY"
+        if hasattr(self, "_expression_grid"):
+            self._expression_grid.visible = not is_anny
+        if hasattr(self, "_expression_reset_row"):
+            self._expression_reset_row.visible = not is_anny
+        if hasattr(self, "_anny_hierarchy_grid"):
+            self._anny_hierarchy_grid.visible = is_anny
+        self.window.set_needs_layout()
+
+    def _classify_anny_bone(self, bone_name):
+        if bone_name.endswith(".L"):
+            side = "Left"
+            base_name = bone_name[:-2]
+        elif bone_name.endswith(".R"):
+            side = "Right"
+            base_name = bone_name[:-2]
+        else:
+            side = None
+            base_name = bone_name
+
+        if base_name == "root":
+            return "Root", "Root"
+
+        leg_groups = {
+            "pelvis": "Pelvis",
+            "upperleg": "Upper Leg",
+            "lowerleg": "Lower Leg",
+            "foot": "Foot",
+            "toe": "Toes",
+        }
+        for prefix, group in leg_groups.items():
+            if base_name.startswith(prefix):
+                region = f"{side} Leg" if side else "Torso"
+                return region, group
+
+        arm_groups = {
+            "clavicle": "Clavicle",
+            "shoulder": "Shoulder",
+            "upperarm": "Upper Arm",
+            "lowerarm": "Lower Arm",
+            "wrist": "Wrist",
+            "finger": "Fingers",
+            "metacarpal": "Fingers",
+        }
+        for prefix, group in arm_groups.items():
+            if base_name.startswith(prefix):
+                region = f"{side} Arm" if side else "Other"
+                return region, group
+
+        if base_name.startswith("spine"):
+            return "Torso", "Spine"
+        if base_name.startswith("breast"):
+            return "Torso", "Breast"
+        if base_name.startswith("neck"):
+            return "Head & Face", "Neck"
+        if base_name == "head":
+            return "Head & Face", "Head"
+        if base_name == "jaw":
+            return "Head & Face", "Jaw"
+        if base_name.startswith("tongue"):
+            return "Tongue", "Tongue"
+        if base_name.startswith(("eye", "oculi", "orbicularis")):
+            return "Head & Face", "Eyes"
+        if base_name.startswith(("oris", "risorius")):
+            return "Head & Face", "Mouth"
+        if base_name.startswith(("levator", "temporalis")):
+            return "Head & Face", "Face Muscles"
+        if base_name.startswith("special"):
+            return "Head & Face", "Other Face Controls"
+
+        return "Other", "Other"
+
+    def _build_anny_bone_hierarchy(self):
+        hierarchy = {region: {} for region in AppWindow.ANNY_REGION_ORDER}
+        for bone_index, bone_name in enumerate(AppWindow.JOINT_NAMES["ANNY"]["pose"]):
+            region, group = self._classify_anny_bone(bone_name)
+            hierarchy.setdefault(region, {})
+            hierarchy[region].setdefault(group, [])
+            hierarchy[region][group].append((bone_index, bone_name))
+        return {
+            region: groups
+            for region, groups in hierarchy.items()
+            if groups
+        }
+
+    def _populate_anny_regions(self):
+        self._updating_anny_hierarchy = True
+        self._anny_region.clear_items()
+        for region in self._anny_bone_hierarchy.keys():
+            self._anny_region.add_item(region)
+        if self._anny_region.number_of_items > 0:
+            self._anny_region.selected_index = 0
+        self._updating_anny_hierarchy = False
+        self._populate_anny_groups(select_first=False)
+
+    def _populate_anny_groups(self, select_first=True):
+        region = self._anny_region.selected_text
+        groups = self._anny_bone_hierarchy.get(region, {})
+
+        self._updating_anny_hierarchy = True
+        self._anny_group.clear_items()
+        for group in groups.keys():
+            self._anny_group.add_item(group)
+        if self._anny_group.number_of_items > 0:
+            self._anny_group.selected_index = 0
+        self._updating_anny_hierarchy = False
+        self._populate_anny_bones(select_first=select_first)
+
+    def _populate_anny_bones(self, select_first=True):
+        region = self._anny_region.selected_text
+        group = self._anny_group.selected_text
+        self._anny_visible_bones = self._anny_bone_hierarchy.get(region, {}).get(group, [])
+
+        self._updating_anny_hierarchy = True
+        self._anny_bone.clear_items()
+        for bone_index, bone_name in self._anny_visible_bones:
+            self._anny_bone.add_item(f"{bone_index}-{bone_name}")
+        if self._anny_bone.number_of_items > 0:
+            self._anny_bone.selected_index = 0
+        self._updating_anny_hierarchy = False
+
+        if select_first and self._anny_visible_bones:
+            self._select_anny_bone_index(self._anny_visible_bones[0][0])
+
+    def _select_anny_bone_index(self, bone_index):
+        if self._body_model.selected_text != "ANNY":
+            return
+        if self._body_pose_comp.selected_text != "pose":
+            self._body_pose_comp.selected_index = 0
+            self._on_body_pose_comp("pose", 0)
+        if bone_index < self._body_pose_joint.number_of_items:
+            self._updating_anny_hierarchy = True
+            self._body_pose_joint.selected_index = bone_index
+            self._updating_anny_hierarchy = False
+            self._reset_rot_sliders()
+
+    def _sync_anny_hierarchy_to_bone(self, bone_index):
+        if self._body_model.selected_text != "ANNY":
+            return
+
+        bone_name = AppWindow.JOINT_NAMES["ANNY"]["pose"][bone_index]
+        region, group = self._classify_anny_bone(bone_name)
+        if region not in self._anny_bone_hierarchy:
+            return
+
+        self._updating_anny_hierarchy = True
+        region_names = list(self._anny_bone_hierarchy.keys())
+        self._anny_region.selected_index = region_names.index(region)
+
+        groups = self._anny_bone_hierarchy[region]
+        group_names = list(groups.keys())
+        self._anny_group.clear_items()
+        for group_name in group_names:
+            self._anny_group.add_item(group_name)
+        self._anny_group.selected_index = group_names.index(group)
+
+        self._anny_visible_bones = groups[group]
+        self._anny_bone.clear_items()
+        selected_bone_index = 0
+        for visible_index, (candidate_index, candidate_name) in enumerate(self._anny_visible_bones):
+            self._anny_bone.add_item(f"{candidate_index}-{candidate_name}")
+            if candidate_index == bone_index:
+                selected_bone_index = visible_index
+        self._anny_bone.selected_index = selected_bone_index
+        self._updating_anny_hierarchy = False
+
+    def _on_anny_region(self, name, index):
+        if self._updating_anny_hierarchy:
+            return
+        self._populate_anny_groups(select_first=True)
+
+    def _on_anny_group(self, name, index):
+        if self._updating_anny_hierarchy:
+            return
+        self._populate_anny_bones(select_first=True)
+
+    def _on_anny_bone(self, name, index):
+        if self._updating_anny_hierarchy:
+            return
+        if index < len(self._anny_visible_bones):
+            self._select_anny_bone_index(self._anny_visible_bones[index][0])
+
     def _on_body_model(self, name, index):
         logger.info(f"Loading body model {name}-{index}")
         self._body_beta_val.double_value = 0.0
         AppWindow.CAM_FIRST = True
         self.load_body_model(name)
+        self._set_model_specific_ui_visibility(name)
 
 # treat anny phenotypes like smpl betas
         self._body_model_shape_comp.clear_items()
@@ -1188,6 +1413,8 @@ class AppWindow:
         joint_names = AppWindow.JOINT_NAMES[name][self._body_pose_comp.selected_text]
         for i in range(AppWindow.POSE_PARAMS[name][self._body_pose_comp.selected_text].shape[1]):
             self._body_pose_joint.add_item(f'{i}-{joint_names[i]}')
+        if name == "ANNY" and self._body_pose_joint.number_of_items > 0:
+            self._sync_anny_hierarchy_to_bone(0)
 
         self._reset_rot_sliders()
         AppWindow.SELECTED_JOINT = None
@@ -1225,6 +1452,9 @@ class AppWindow:
 
     def _on_body_pose_joint(self, name, index):
         self._reset_rot_sliders()
+        if self._body_model.selected_text == "ANNY" and not self._updating_anny_hierarchy:
+            bone_index = int(name.split('-')[0])
+            self._sync_anny_hierarchy_to_bone(bone_index)
 
     def _on_body_pose_joint_x(self, val):
         bm = self._body_model.selected_text
