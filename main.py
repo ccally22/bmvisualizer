@@ -1085,18 +1085,31 @@ class AppWindow:
                     self._scene.remove_3d_label(label3d)
 
     def _on_show_joints(self, show):
-        for i in range(200):
+        joints = AppWindow.JOINTS
+        num_joints = joints.shape[0] if joints is not None else 0
+        bm = self._body_model.selected_text
+
+        for i in range(300):
             if self._scene.scene.has_geometry(f"__joints_{i}__"):
                 self._scene.scene.remove_geometry(f"__joints_{i}__")
 
         green = [0.3, 0.7, 0.3, 1.0]
         red = [0.7, 0.3, 0.3, 1.0]
-        hand_radius = 0.01
-        foot_radius = 0.01
-        head_radius = 0.007
-        body_radius = 0.05
-        joint_names = self._current_joint_display_names()
+        if bm == "ANNY":
+            hand_radius = 0.005
+            foot_radius = 0.005
+            head_radius = 0.004
+            body_radius = 0.01
+        else:
+            hand_radius = 0.01
+            foot_radius = 0.01
+            head_radius = 0.007
+            body_radius = 0.05
+        # joint_names = AppWindow.KEYPOINT_NAMES[self._body_model.selected_text]
 
+        
+        joint_names = AppWindow.KEYPOINT_NAMES.get(bm, [])
+        
         mat = rendering.MaterialRecord()
         mat.base_color = red
         mat.shader = "defaultLit"
@@ -1108,13 +1121,14 @@ class AppWindow:
         joints = AppWindow.JOINTS
         if show:
             # logger.info('drawing joints')
-            for i in range(joints.shape[0]):
+            for i in range(num_joints):
+                joint_name = joint_names[i] if i < len(joint_names) else f"joint_{i}"
                 radius = body_radius
-                if joint_names[i] in LEFT_HAND_KEYPOINT_NAMES + RIGHT_HAND_KEYPOINT_NAMES:
+                if joint_name in LEFT_HAND_KEYPOINT_NAMES + RIGHT_HAND_KEYPOINT_NAMES:
                     radius = hand_radius
-                elif joint_names[i] in HEAD_KEYPOINT_NAMES:
+                elif joint_name in HEAD_KEYPOINT_NAMES:
                     radius = head_radius
-                elif joint_names[i] in FOOT_KEYPOINT_NAMES:
+                elif joint_name in FOOT_KEYPOINT_NAMES:
                     radius = foot_radius
 
                 sg = o3d.geometry.TriangleMesh.create_sphere(radius=radius)
@@ -1132,7 +1146,7 @@ class AppWindow:
             # logger.debug(AppWindow.JOINTS[20])
         else:
  
-            for i in range(200):
+            for i in range(300):
                 if self._scene.scene.has_geometry(f"__joints_{i}__"):
                     self._scene.scene.remove_geometry(f"__joints_{i}__")
 
@@ -1904,8 +1918,18 @@ class AppWindow:
             # anny gibt dictionary zurück keine Objekte, deshalb muss man anders darauf zugreifen
             verts = model_output["vertices"].squeeze(0).detach().numpy()
             # die joints werden bei anny unter rest_bone_heads gespeichert
-            AppWindow.JOINTS = model_output["rest_bone_heads"].squeeze(0).detach().numpy()
+            AppWindow.JOINTS = (
+                       model_output["bone_poses"][0, :, :3, 3]
+                        .detach()
+                        .numpy()
+            )
             # torch tensor der noch konvertiert werden muss zu numpy array
+
+            verts = verts[:, [0, 2, 1]]
+            verts[:, 2] *= -1
+
+            AppWindow.JOINTS = AppWindow.JOINTS[:, [0, 2, 1]]
+            AppWindow.JOINTS[:, 2] *= -1
             faces = model.get_triangular_faces().cpu().numpy().astype(np.int32)
 
         else:
@@ -1924,6 +1948,7 @@ class AppWindow:
             )
             verts = model_output.vertices[0].detach().numpy()
             AppWindow.JOINTS = model_output.joints[0].detach().numpy()
+            
             faces = model.faces
 
         # bauen des 3D-Mesh
@@ -1932,11 +1957,11 @@ class AppWindow:
         mesh.vertices = o3d.utility.Vector3dVector(verts)
         mesh.triangles = o3d.utility.Vector3iVector(faces)
         mesh.compute_vertex_normals()
-        if body_model.lower() == 'anny':
-            R = roma.euler_to_rotmat('x', [270.], degrees=True)
-            mesh.rotate(R, center=(0, 0, 0))
-            #mesh.translate([0, -5, 0])
-            mesh.compute_vertex_normals()
+        #if body_model.lower() == 'anny':
+            # R = roma.euler_to_rotmat('x', [270.], degrees=True)
+            # mesh.rotate(R, center=(0, 0, 0))
+            # mesh.translate([0, -5, 0])
+            # mesh.compute_vertex_normals()
         mesh.paint_uniform_color([0.5, 0.5, 0.5])
 
         # laden des fertigen neuen Mesh und kleine Anpassungen
