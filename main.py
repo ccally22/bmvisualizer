@@ -45,6 +45,8 @@ from SUPR.supr.pytorch.supr import SUPR
 
 # import star as STAR ?
 from STAR.star.pytorch.star import STAR
+#from anny.src.anny.skinning.warp_skinning import grad_or_none
+
 # import anny (es soll die lokale version benutzen)
 ANNY_SRC_DIR = os.path.join(os.path.dirname(__file__), "anny", "src")
 if os.path.isdir(ANNY_SRC_DIR) and ANNY_SRC_DIR not in sys.path:
@@ -1382,10 +1384,10 @@ class AppWindow:
         logger.info(f"Loading body model {name}-{index}")
         self._body_beta_val.double_value = 0.0
         AppWindow.CAM_FIRST = True
-        self.load_body_model(name)
+        #self.load_body_model(name)
         self._set_model_specific_ui_visibility(name)
 
-# treat anny phenotypes like smpl betas
+        # treat anny phenotypes like smpl betas
         self._body_model_shape_comp.clear_items()
 
         if name == "ANNY":
@@ -1402,8 +1404,11 @@ class AppWindow:
 
         self._body_model_gender.clear_items()
 
+        self._body_model_gender.clear_items()
         for gender in AppWindow.BODY_MODEL_GENDERS[name]:
             self._body_model_gender.add_item(gender)
+
+        self.load_body_model(name, gender=self._body_model_gender.selected_text)
 
         self._body_pose_comp.clear_items()
         for k in AppWindow.POSE_PARAMS[name].keys():
@@ -1864,75 +1869,40 @@ class AppWindow:
 
     def preload_body_models(self):
         from smplx import SMPL, SMPLX, MANO, FLAME
+        from Wrapper import wrapper_dict
 
         for body_model in AppWindow.BODY_MODEL_NAMES:
             for gender in AppWindow.BODY_MODEL_GENDERS[body_model]:
                 logger.info(f'Loading {body_model}-{gender}')
 
-                extra_params = {'gender': gender}
-                if body_model in ('SMPLX', 'MANO', 'FLAME'):
-                    extra_params['use_pca'] = False
-                    extra_params['flat_hand_mean'] = True
-                    extra_params['use_face_contour'] = True
-                if body_model == 'STAR':
-                    model = STAR(gender=gender.lower())
-                elif body_model == 'ANNY':
-                    model = create_model() # modell muss zuerst erstellt werden
-                    AppWindow.PRELOADED_BODY_MODELS['anny'] = model
-                else:
+                # alter Code für SMPL, SUPR, SMPLX, MANO und FLAME
+                if body_model in ('SMPL', 'SUPR', 'SMPLX', 'MANO', 'FLAME'):
+                    extra_params = {'gender': gender}
+                    if body_model in ('SMPLX', 'MANO', 'FLAME'):
+                        extra_params['use_pca'] = False
+                        extra_params['flat_hand_mean'] = True
+                        extra_params['use_face_contour'] = True
                     try:
                         model = eval(body_model.upper())(f'data/body_models/{body_model.lower()}', **extra_params)
                     except:
                         model = eval(body_model.upper())(f'data/body_models/{body_model.lower()}/supr_{gender}.npy')
 
+                # wrapper-Implementierung fuer alle neuen Modelle + STAR und ANNY
+                else:
+                    wrapper = wrapper_dict.WRAPPER_CLASSES[body_model]()
+                    model = wrapper.preload_body_model(gender)
 
-
-                AppWindow.PRELOADED_BODY_MODELS[f'{body_model.lower()}-{gender.lower()}'] = model
+                key = f'{body_model.lower()}-{gender.lower()}'
+                AppWindow.PRELOADED_BODY_MODELS[key] = model
         logger.info(f'Loaded body models {AppWindow.PRELOADED_BODY_MODELS.keys()}')
 
     # @torch.no_grad()
     def load_body_model(self, body_model='smpl', gender='neutral'):
+        from Wrapper import wrapper_dict
         self._scene.scene.remove_geometry("__body_model__")
 
-        if body_model.lower() == 'anny':
-            # parameter von der gui
-            input_params = copy.deepcopy(AppWindow.POSE_PARAMS[body_model])
-
-            # ohne den ersten 1 teil (der immer gleich ist):
-            rotvec = input_params['pose'][0]
-            # erstellt die rotationsmatrix
-            bones_rotmat = roma.rotvec_to_rotmat(rotvec)
-            # rotation + translation = 0 + der erste teil wird wieder hinzugefügt
-            pose_parameters = roma.Rigid(
-                bones_rotmat, torch.zeros((len(bones_rotmat), 3), dtype=torch.float64)
-            )[None].to_homogeneous()
-
-            model = AppWindow.PRELOADED_BODY_MODELS['anny']
-            model_output = model(
-                pose_parameters=pose_parameters,
-                phenotype_kwargs=self._anny_phenotype_values,
-                local_changes_kwargs={},
-                pose_parameterization=None,
-                return_bone_ends=False
-            )
-            # anny gibt dictionary zurück keine Objekte, deshalb muss man anders darauf zugreifen
-            verts = model_output["vertices"].squeeze(0).detach().numpy()
-            # die joints werden bei anny unter rest_bone_heads gespeichert
-            AppWindow.JOINTS = (
-                       model_output["bone_poses"][0, :, :3, 3]
-                        .detach()
-                        .numpy()
-            )
-            # torch tensor der noch konvertiert werden muss zu numpy array
-
-            verts = verts[:, [0, 2, 1]]
-            verts[:, 2] *= -1
-
-            AppWindow.JOINTS = AppWindow.JOINTS[:, [0, 2, 1]]
-            AppWindow.JOINTS[:, 2] *= -1
-            faces = model.get_triangular_faces().cpu().numpy().astype(np.int32)
-
-        else:
+        # alter Code für SMPL, SUPR, SMPLX, MANO und FLAME
+        if body_model in ('SMPL', 'SUPR', 'SMPLX', 'MANO', 'FLAME'):
             model = AppWindow.PRELOADED_BODY_MODELS[f'{body_model.lower()}-{gender.lower()}']
             # input eingaben
             input_params = copy.deepcopy(AppWindow.POSE_PARAMS[body_model])
@@ -1948,8 +1918,19 @@ class AppWindow:
             )
             verts = model_output.vertices[0].detach().numpy()
             AppWindow.JOINTS = model_output.joints[0].detach().numpy()
-            
+
             faces = model.faces
+
+        # wrapper-Implementierung fuer alle neuen Modelle + STAR und ANNY
+        else:
+            # parameter von der gui
+            input_params = copy.deepcopy(AppWindow.POSE_PARAMS[body_model])
+            wrapper = AppWindow.PRELOADED_BODY_MODELS[f'{body_model.lower()}-{gender.lower()}']
+
+            mesh_data = wrapper.forward(input_params, self._body_beta_tensor)
+            verts = mesh_data[0]
+            AppWindow.JOINTS = mesh_data[1]
+            faces = mesh_data[2]
 
         # bauen des 3D-Mesh
         mesh = o3d.geometry.TriangleMesh()
@@ -1957,11 +1938,6 @@ class AppWindow:
         mesh.vertices = o3d.utility.Vector3dVector(verts)
         mesh.triangles = o3d.utility.Vector3iVector(faces)
         mesh.compute_vertex_normals()
-        #if body_model.lower() == 'anny':
-            # R = roma.euler_to_rotmat('x', [270.], degrees=True)
-            # mesh.rotate(R, center=(0, 0, 0))
-            # mesh.translate([0, -5, 0])
-            # mesh.compute_vertex_normals()
         mesh.paint_uniform_color([0.5, 0.5, 0.5])
 
         # laden des fertigen neuen Mesh und kleine Anpassungen
