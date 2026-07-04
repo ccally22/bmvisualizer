@@ -75,6 +75,12 @@ from simple_ik import simple_ik_solver
 isMacOS = (platform.system() == "Darwin")
 
 
+def euler_to_rotvec_for_body_model(body_model, euler_angle):
+    if body_model.lower() == 'anny':
+        euler_angle = [euler_angle[0], euler_angle[2], euler_angle[1]]
+    return R.Rotation.from_euler('xyz', euler_angle, degrees=True).as_rotvec()
+
+
 class Settings:
     UNLIT = "defaultUnlit"
     LIT = "defaultLit"
@@ -408,7 +414,7 @@ class AppWindow:
         'FLAME': FLAME_KEYPOINT_NAMES,
         'SUPR': SMPLX_NAMES,
         'STAR': SMPL_NAMES,
-        'ANNY': [],
+        'ANNY': BONE_NAMES,
     }
 
     JOINTS = None
@@ -1476,7 +1482,7 @@ class AppWindow:
         bp = self._body_pose_comp.selected_text
         ji = int(self._body_pose_joint.selected_text.split('-')[0])
         euler_angle = [val, self._body_pose_joint_y.int_value, self._body_pose_joint_z.int_value]
-        axis_angle = R.Rotation.from_euler('xyz', euler_angle, degrees=True).as_rotvec()
+        axis_angle = euler_to_rotvec_for_body_model(bm, euler_angle)
         AppWindow.POSE_PARAMS[bm][bp][0, ji] = torch.from_numpy(axis_angle).float()
 
         self.load_body_model(
@@ -1490,7 +1496,7 @@ class AppWindow:
         bp = self._body_pose_comp.selected_text
         ji = int(self._body_pose_joint.selected_text.split('-')[0])
         euler_angle = [self._body_pose_joint_x.int_value, val, self._body_pose_joint_z.int_value]
-        axis_angle = R.Rotation.from_euler('xyz', euler_angle, degrees=True).as_rotvec()
+        axis_angle = euler_to_rotvec_for_body_model(bm, euler_angle)
         AppWindow.POSE_PARAMS[bm][bp][0, ji] = torch.from_numpy(axis_angle).float()
 
         self.load_body_model(
@@ -1504,7 +1510,7 @@ class AppWindow:
         bp = self._body_pose_comp.selected_text
         ji = int(self._body_pose_joint.selected_text.split('-')[0])
         euler_angle = [self._body_pose_joint_x.int_value, self._body_pose_joint_y.int_value, val]
-        axis_angle = R.Rotation.from_euler('xyz', euler_angle, degrees=True).as_rotvec()
+        axis_angle = euler_to_rotvec_for_body_model(bm, euler_angle)
         AppWindow.POSE_PARAMS[bm][bp][0, ji] = torch.from_numpy(axis_angle).float()
 
         self.load_body_model(
