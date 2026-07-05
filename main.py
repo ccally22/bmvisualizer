@@ -269,7 +269,7 @@ class AppWindow:
     ]
 
     # add Star and Anny
-    BODY_MODEL_NAMES = ["SMPL", "SMPLX", "MANO", "FLAME", "SUPR", "STAR", "ANNY"]
+    BODY_MODEL_NAMES = ["SMPL", "SMPLX", "MANO", "FLAME", "SUPR", "STAR", "ANNY", "MHR"]
     # für anny werden die rigs wie genders interpretiert
     BODY_MODEL_GENDERS = {
         'SMPL': ['neutral', 'male', 'female'],
@@ -279,6 +279,7 @@ class AppWindow:
         'SUPR': ['neutral', 'male', 'female'],
         'STAR': ['neutral', 'male', 'female'],
         'ANNY': ['default'],
+        'MHR': ['default']
     }
 
     BODY_MODEL_N_BETAS = {
@@ -288,7 +289,8 @@ class AppWindow:
         'FLAME': 10,
         'SUPR': 10,
         'STAR': 10,
-        'ANNY': 6 # ?? gender, age, muscle, weight, height,proportions
+        'ANNY': 6, # ?? gender, age, muscle, weight, height,proportions
+        'MHR': 45
     }
     ANNY_PHENOTYPE_NAMES = ["gender", "age", "muscle", "weight", "height", "proportions"]
     ANNY_PHENOTYPE_DEFAULTS = {
@@ -351,6 +353,9 @@ class AppWindow:
         'ANNY' : {
             'pose': torch.zeros(1, 163, 3),
             'trans': torch.zeros(1, 0, 3),
+        },
+        'MHR' : {
+            'model_parameters': torch.zeros(1, 204)
         }
     }
 
@@ -390,6 +395,9 @@ class AppWindow:
         'ANNY': {
             'pose': BONE_NAMES,
             'trans': []
+        },
+        'MHR' : {
+            'model_parameters' : [str(i) for i in range(204)]
         }
     }
 
@@ -1401,6 +1409,8 @@ class AppWindow:
                 self._body_model_shape_comp.add_item(f"{i+1:02d}")
             self._body_beta_val.set_limits(-5.0, 5.0)
             self._body_beta_val.double_value = 0.0
+            self._body_beta_tensor = torch.zeros(1, AppWindow.BODY_MODEL_N_BETAS[name])
+            self._body_beta_text.text = f",".join(f'{x:.1f}' for x in self._body_beta_tensor[0].numpy().tolist())
 
         self._body_model_gender.clear_items()
 
@@ -1526,7 +1536,7 @@ class AppWindow:
             self._body_model_shape_comp.selected_text
         ]
         else:
-            self._body_beta_tensor = torch.zeros(1, 10)
+            self._body_beta_tensor = torch.zeros(1, AppWindow.BODY_MODEL_N_BETAS[self._body_model.selected_text])
             self._body_beta_text.text = f",".join(f'{x:.1f}' for x in self._body_beta_tensor[0].numpy().tolist())
             self._body_beta_val.double_value = 0.0
         self.load_body_model(

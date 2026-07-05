@@ -1,9 +1,11 @@
 from Wrapper.ANNY_WRAPPER import ANNY_WRAPPER
 from Wrapper.STAR_WRAPPER import STAR_WRAPPER
 from Wrapper.SUPR_WRAPPER import SUPR_WRAPPER
+from Wrapper.MHR_WRAPPER import MHR_WRAPPER
 
 WRAPPER_CLASSES = {
     'SUPR': SUPR_WRAPPER,
     'ANNY': ANNY_WRAPPER,
     'STAR': STAR_WRAPPER,
+    'MHR': MHR_WRAPPER
 }
