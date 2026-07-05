@@ -37,8 +37,12 @@ class ANNY_WRAPPER(BodyModelWrapper):
         )
         # anny gibt dictionary zurück keine Objekte, deshalb muss man anders darauf zugreifen
         verts = model_output["vertices"].squeeze(0).detach().numpy()
-        # die joints werden bei anny unter rest_bone_heads gespeichert
-        joints = model_output["rest_bone_heads"].squeeze(0).detach().numpy()
+        # die joints werden bei anny unter bone_poses gespeichert
+        joints = (
+                model_output["bone_poses"][0, :, :3, 3]
+                .detach()
+                .numpy()
+        )
         # torch tensor der noch konvertiert werden muss zu numpy array
         faces = self._model.get_triangular_faces().cpu().numpy().astype(np.int32)
 
