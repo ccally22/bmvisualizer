@@ -400,7 +400,7 @@ class AppWindow:
         'FLAME': FLAME_KEYPOINT_NAMES,
         'SUPR': SMPLX_NAMES,
         'STAR': SMPL_NAMES,
-        'ANNY': [],
+        'ANNY': BONE_NAMES,
     }
 
     JOINTS = None
