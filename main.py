@@ -839,10 +839,22 @@ class AppWindow:
         # grid.add_child(gui.Label("reset"))
         # grid.add_child(self._body_beta_reset)
         grid = gui.VGrid(2, 0.25 * em)
-        grid.add_child(gui.Label("Pose comp:"))
+        self._body_pose_comp_label = gui.Label("Pose comp:")
+        self._body_pose_joint_label = gui.Label("Joint id:")
+        self._anny_region_label = gui.Label("Anny Region")
+        self._anny_group_label = gui.Label("Anny Group")
+        self._anny_bone_label = gui.Label("Anny Bone")
+
+        grid.add_child(self._body_pose_comp_label)
         grid.add_child(self._body_pose_comp)
-        grid.add_child(gui.Label("Joint id:"))
+        grid.add_child(self._body_pose_joint_label)
         grid.add_child(self._body_pose_joint)
+        grid.add_child(self._anny_region_label)
+        grid.add_child(self._anny_region)
+        grid.add_child(self._anny_group_label)
+        grid.add_child(self._anny_group)
+        grid.add_child(self._anny_bone_label)
+        grid.add_child(self._anny_bone)
         grid.add_child(gui.Label("rot_x"))
         grid.add_child(self._body_pose_joint_x)
         grid.add_child(gui.Label("rot_y"))
@@ -860,30 +872,6 @@ class AppWindow:
         h.add_child(self._body_pose_ik)
         # h.add_child(gui.VectorEdit())
         self.model_settings.add_child(h)
-
-        self._anny_hierarchy_grid = gui.VGrid(2, 0.25 * em)
-        self._anny_hierarchy_grid.add_child(gui.Label("Anny Region"))
-        self._anny_hierarchy_grid.add_child(self._anny_region)
-        self._anny_hierarchy_grid.add_child(gui.Label("Anny Group"))
-        self._anny_hierarchy_grid.add_child(self._anny_group)
-        self._anny_hierarchy_grid.add_child(gui.Label("Anny Bone"))
-        self._anny_hierarchy_grid.add_child(self._anny_bone)
-        self.model_settings.add_child(self._anny_hierarchy_grid)
-
-
-        anny_grid = gui.VGrid(2, 0.25 * em)
-        anny_grid.add_child(gui.Label("Pose comp:"))
-        anny_grid.add_child(self._body_pose_comp)
-        anny_grid.add_child(gui.Label("Joint id:"))
-        anny_grid.add_child(self._body_pose_joint)
-        anny_grid.add_child(gui.Label("rot_x"))
-        anny_grid.add_child(self._body_pose_joint_x)
-        anny_grid.add_child(gui.Label("rot_y"))
-        anny_grid.add_child(self._body_pose_joint_y)
-        anny_grid.add_child(gui.Label("rot_z"))
-        anny_grid.add_child(self._body_pose_joint_z)
-        #self.anny_settings.add_child(anny_grid)
-
 
         self._settings_panel.add_fixed(separation_height)
         self._settings_panel.add_child(self.model_settings)
@@ -1217,8 +1205,19 @@ class AppWindow:
             self._expression_grid.visible = not is_anny
         if hasattr(self, "_expression_reset_row"):
             self._expression_reset_row.visible = not is_anny
-        if hasattr(self, "_anny_hierarchy_grid"):
-            self._anny_hierarchy_grid.visible = is_anny
+        if hasattr(self, "_body_pose_joint_label"):
+            self._body_pose_joint_label.visible = not is_anny
+            self._body_pose_joint.visible = not is_anny
+        for attr in (
+            "_anny_region_label",
+            "_anny_region",
+            "_anny_group_label",
+            "_anny_group",
+            "_anny_bone_label",
+            "_anny_bone",
+        ):
+            if hasattr(self, attr):
+                getattr(self, attr).visible = is_anny
         self.window.set_needs_layout()
 
     def _classify_anny_bone(self, bone_name):
@@ -1272,7 +1271,7 @@ class AppWindow:
         if base_name == "jaw":
             return "Head & Face", "Jaw"
         if base_name.startswith("tongue"):
-            return "Tongue", "Tongue"
+            return "Head & Face", "Tongue"
         if base_name.startswith(("eye", "oculi", "orbicularis")):
             return "Head & Face", "Eyes"
         if base_name.startswith(("oris", "risorius")):
@@ -1887,7 +1886,7 @@ class AppWindow:
         from smplx import SMPL, SMPLX, MANO, FLAME
         from Wrapper import wrapper_dict
 
-        for body_model in AppWindow.BODY_MODEL_NAMES:
+        for body_model in list(AppWindow.BODY_MODEL_NAMES):
             for gender in AppWindow.BODY_MODEL_GENDERS[body_model]:
                 logger.info(f'Loading {body_model}-{gender}')
 
@@ -1905,6 +1904,10 @@ class AppWindow:
 
                 # wrapper-Implementierung fuer alle neuen Modelle + STAR und ANNY
                 else:
+                    if body_model not in wrapper_dict.WRAPPER_CLASSES:
+                        logger.warning(f'Skipping unavailable body model wrapper {body_model}')
+                        AppWindow.BODY_MODEL_NAMES.remove(body_model)
+                        break
                     wrapper = wrapper_dict.WRAPPER_CLASSES[body_model]()
                     model = wrapper.preload_body_model(gender)
 
