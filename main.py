@@ -359,6 +359,10 @@ class AppWindow:
     JOINTS = None
     SELECTED_JOINT = None
     BODY_TRANSL = None
+    
+    # Variable GROUND_OFFSET die im Fall None in load_body_model neu berechnet wird (in unmodifizierter Position)
+    # bei Modell-/Gender- Wechsel oder Beta-Änderung wieder neu auf None setzten, um neue Berechnung zu ermöglichen
+    GROUND_OFFSET = None
 
     def __init__(self, width, height):
         self.settings = Settings()
@@ -1078,6 +1082,7 @@ class AppWindow:
         logger.info(f"Loading body model {name}-{index}")
         self._body_beta_val.double_value = 0.0
         AppWindow.CAM_FIRST = True
+        AppWindow.GROUND_OFFSET = None # ermöglichen ground offset neu zu berechnen
         self.load_body_model(name)
         self._body_model_gender.clear_items()
 
@@ -1120,6 +1125,7 @@ class AppWindow:
     def _on_body_model_gender(self, name, index):
         logger.info(f"Changing {self._body_model.selected_text} body model gender to {name}-{index}")
         self._body_beta_val.double_value = 0.0
+        AppWindow.GROUND_OFFSET = None # ermöglichen ground offset neu zu berechnen
         self.load_body_model(self._body_model.selected_text, gender=name)
         self._reset_rot_sliders()
         self._on_show_joints(self._show_joints.checked)
@@ -1128,6 +1134,7 @@ class AppWindow:
     def _on_body_beta_val(self, val):
         self._body_beta_tensor[0, int(self._body_model_shape_comp.selected_text)-1] = float(val)
         self._body_beta_text.text = f",".join(f'{x:.1f}' for x in self._body_beta_tensor[0].numpy().tolist())
+        AppWindow.GROUND_OFFSET = None # ermöglichen ground offset neu zu berechnen
         self.load_body_model(
             self._body_model.selected_text,
             gender=self._body_model_gender.selected_text,
@@ -1205,6 +1212,7 @@ class AppWindow:
         self._body_beta_tensor = torch.zeros(1, 10)
         self._body_beta_text.text = f",".join(f'{x:.1f}' for x in self._body_beta_tensor[0].numpy().tolist())
         self._body_beta_val.double_value = 0.0
+        AppWindow.GROUND_OFFSET = None # ermöglichen ground offset neu zu berechnen
         self.load_body_model(
             self._body_model.selected_text,
             gender=self._body_model_gender.selected_text,
@@ -1255,6 +1263,8 @@ class AppWindow:
         return gui.Widget.EventCallbackResult.IGNORED
 
     def _on_mouse_widget(self, event):
+        print(f"[DEBUG] Mouse event received: type={event.type}, ctrl_down={event.is_modifier_down(gui.KeyModifier.CTRL)}, show_joints={self._show_joints.checked}")
+    
         # We could override BUTTON_DOWN without a modifier, but that would
         # interfere with manipulating the scene.
 
@@ -1654,20 +1664,19 @@ class AppWindow:
         mesh.vertices = o3d.utility.Vector3dVector(verts)
         mesh.triangles = o3d.utility.Vector3iVector(faces)
         
-        user_y = 0.0
-        if "trans" in AppWindow.POSE_PARAMS[body_model]:
-            user_y = AppWindow.POSE_PARAMS[body_model]["trans"][0, 0, 1].item()
-        # Remove user translation before computing ground offset.
-        # Otherwise Y translation would be cancelled by the floor alignment.
-        base_min_y = mesh.get_min_bound()[1] - user_y
-        ground_offset = -base_min_y
+        # berechne den Ground Offset, wenn er noch nicht gesetzt wurde
+        if AppWindow.GROUND_OFFSET is None:
+            user_y = 0.0
+            if "trans" in AppWindow.POSE_PARAMS[body_model]:
+                user_y = AppWindow.POSE_PARAMS[body_model]["trans"][0, 0, 1].item()
+            base_min_y = mesh.get_min_bound()[1] - user_y
+            AppWindow.GROUND_OFFSET = -base_min_y
 
+        ground_offset = AppWindow.GROUND_OFFSET
         mesh.translate([0, ground_offset, 0])
-        AppWindow.JOINTS += np.array([0, ground_offset, 0])
-        mesh.compute_vertex_normals()
-        mesh.paint_uniform_color([0.5, 0.5, 0.5])
-        
-       
+        AppWindow.JOINTS += np.array([0, ground_offset, 0]) 
+                
+            
         self._scene.scene.add_geometry("__body_model__", mesh,
                                        self.settings.material)
         bounds = mesh.get_axis_aligned_bounding_box()
