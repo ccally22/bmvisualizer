@@ -404,6 +404,7 @@ class AppWindow:
         },
         'MHR' : {
             'model_parameters' : [str(i) for i in range(204)]
+
         }
     }
 
@@ -691,6 +692,10 @@ class AppWindow:
         self._body_pose_joint_z = gui.Slider(gui.Slider.INT)
         self._body_pose_joint_z.set_limits(-180, 180)
 
+        # new slider for MHR
+        self._body_pose_joint_val = gui.Slider(gui.Slider.DOUBLE)
+        self._body_pose_joint_val.set_limits(-1.0, 1.0)
+
         self._body_pose_reset = gui.Button("Reset pose")
         self._body_pose_ik = gui.Button("Run IK")
 
@@ -790,6 +795,11 @@ class AppWindow:
         self._body_pose_joint_z.set_on_value_changed(self._on_body_pose_joint_z)
         self._body_pose_reset.set_on_clicked(self._on_body_pose_reset)
 
+        # neu for mhr?
+        self._body_pose_joint_z.set_on_value_changed(self._on_body_pose_joint_z)
+        self._body_pose_joint_val.set_on_value_changed(self._on_body_pose_joint_val)
+
+
         self._body_pose_ik.set_on_clicked(self._on_run_ik)
 
         self._scene.set_on_mouse(self._on_mouse_widget)
@@ -861,6 +871,8 @@ class AppWindow:
         grid.add_child(self._body_pose_joint_y)
         grid.add_child(gui.Label("rot_z"))
         grid.add_child(self._body_pose_joint_z)
+        grid.add_child(gui.Label("value"))
+        grid.add_child(self._body_pose_joint_val)
         self.model_settings.add_child(grid)
 
         h = gui.Horiz(0.25 * em)  # row 2
@@ -1200,6 +1212,13 @@ class AppWindow:
         self._apply_settings()
 
     def _set_model_specific_ui_visibility(self, body_model_name):
+        is_mhr = body_model_name == "MHR"
+        self._body_pose_joint_x.visible = not is_mhr
+        self._body_pose_joint_y.visible = not is_mhr
+        self._body_pose_joint_z.visible = not is_mhr
+        self._body_pose_joint_val.visible = is_mhr
+        # ... (dein bestehender Code fuer ANNY etc. bleibt unveraendert)
+        self.window.set_needs_layout()
         is_anny = body_model_name == "ANNY"
         if hasattr(self, "_expression_grid"):
             self._expression_grid.visible = not is_anny
@@ -1475,6 +1494,15 @@ class AppWindow:
         if self._body_model.selected_text == "ANNY" and not self._updating_anny_hierarchy:
             bone_index = int(name.split('-')[0])
             self._sync_anny_hierarchy_to_bone(bone_index)
+        elif self._body_model.selected_text == "MHR":   # NEU
+            ji = int(name.split('-')[0])
+            gender = self._body_model_gender.selected_text
+            wrapper = AppWindow.PRELOADED_BODY_MODELS[f'mhr-{gender.lower()}']
+            lo, hi = wrapper._pose_param_limits[ji]
+            self._body_pose_joint_val.set_limits(float(lo), float(hi))
+            self._body_pose_joint_val.double_value = float(
+                AppWindow.POSE_PARAMS["MHR"]["model_parameters"][0, ji]
+            )
 
     def _on_body_pose_joint_x(self, val):
         bm = self._body_model.selected_text
@@ -1518,6 +1546,17 @@ class AppWindow:
         )
         # self._on_show_joints(self._show_joints.checked)
 
+    def _on_body_pose_joint_val(self, val):
+        bm = self._body_model.selected_text
+        bp = self._body_pose_comp.selected_text
+        ji = int(self._body_pose_joint.selected_text.split('-')[0])
+        AppWindow.POSE_PARAMS[bm][bp][0, ji] = float(val)
+
+        self.load_body_model(
+            self._body_model.selected_text,
+            gender=self._body_model_gender.selected_text,
+        )
+
     def _on_body_model_shape_comp(self, name, index):
         if self._body_model.selected_text == 'ANNY':
             self._body_beta_val.double_value = self._anny_phenotype_values.get(name, 0.5)
@@ -1528,11 +1567,21 @@ class AppWindow:
         self._body_exp_val.double_value = self._body_exp_tensor[0, index].item()
 
     def _on_body_pose_comp(self, name, index):
+        if self._body_model.selected_text == "MHR":   # NEU
+            ji = int(name.split('-')[0])
+            gender = self._body_model_gender.selected_text
+            wrapper = AppWindow.PRELOADED_BODY_MODELS[f'mhr-{gender.lower()}']
+            lo, hi = wrapper._pose_param_limits[ji]
+            self._body_pose_joint_val.set_limits(float(lo), float(hi))
+            self._body_pose_joint_val.double_value = float(
+                AppWindow.POSE_PARAMS["MHR"]["model_parameters"][0, ji]
+            )
         self._body_pose_joint.clear_items()
         joint_names = AppWindow.JOINT_NAMES[self._body_model.selected_text][name]
         for i in range(AppWindow.POSE_PARAMS[self._body_model.selected_text][name].shape[1]):
             self._body_pose_joint.add_item(f'{i}-{joint_names[i]}')
         self._reset_rot_sliders()
+
 
     def _on_body_beta_reset(self):
         if self._body_model.selected_text == 'ANNY':
@@ -1738,6 +1787,7 @@ class AppWindow:
         self._body_pose_joint_x.int_value = 0
         self._body_pose_joint_y.int_value = 0
         self._body_pose_joint_z.int_value = 0
+        self._body_pose_joint_val.double_value = 0.0
 
     def _on_material_prefab(self, name, index):
         self.settings.apply_material_prefab(name)
@@ -1910,6 +1960,8 @@ class AppWindow:
                         break
                     wrapper = wrapper_dict.WRAPPER_CLASSES[body_model]()
                     model = wrapper.preload_body_model(gender)
+                    if body_model == "MHR":
+                        AppWindow.JOINT_NAMES["MHR"]["model_parameters"] = wrapper._pose_param_names
 
                 key = f'{body_model.lower()}-{gender.lower()}'
                 AppWindow.PRELOADED_BODY_MODELS[key] = model
