@@ -6,13 +6,13 @@ class STAR_WRAPPER(BodyModelWrapper):
         self._model = STAR(gender=gender.lower())
         return self
 
-    def forward(self, input_params, betas):
+    def forward(self, input_params, shape_params):
         # berechnung der neuen werte
         for k, v in input_params.items():
             input_params[k] = v.reshape(1, -1)
 
         model_output = self._model(
-            betas=betas,
+            betas=shape_params,
             #expression=self._body_exp_tensor,
             **input_params,
         )

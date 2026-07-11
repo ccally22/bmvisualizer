@@ -1941,12 +1941,18 @@ class AppWindow:
             faces = model.faces
 
         # wrapper-Implementierung fuer alle neuen Modelle + STAR und ANNY
+       # wrapper-Implementierung fuer alle neuen Modelle + STAR und ANNY
         else:
             # parameter von der gui
             input_params = copy.deepcopy(AppWindow.POSE_PARAMS[body_model])
             wrapper = AppWindow.PRELOADED_BODY_MODELS[f'{body_model.lower()}-{gender.lower()}']
 
-            mesh_data = wrapper.forward(input_params, self._body_beta_tensor)
+            # ANNY nutzt Phenotypes (Dict), andere Modelle Betas (Tensor)
+            if body_model == 'ANNY':
+                mesh_data = wrapper.forward(input_params, self._anny_phenotype_values)
+            else:
+                mesh_data = wrapper.forward(input_params, self._body_beta_tensor)
+            
             verts = mesh_data[0]
             AppWindow.JOINTS = mesh_data[1]
             faces = mesh_data[2]

@@ -18,7 +18,9 @@ class ANNY_WRAPPER(BodyModelWrapper):
         self._model = create_model()
         return self
 
-    def forward(self, input_params, betas=None):
+    def forward(self, input_params, shape_params=None):
+        # shape_params bei ANNY: dict mit phenotypes
+        phenotypes = shape_params if shape_params else {}
         # ohne den ersten 1 teil (der immer gleich ist):
         rotvec = input_params['pose'][0]
         # erstellt die rotationsmatrix
@@ -30,7 +32,7 @@ class ANNY_WRAPPER(BodyModelWrapper):
 
         model_output = self._model(
             pose_parameters=pose_parameters,
-            phenotype_kwargs={},
+            phenotype_kwargs=phenotypes,
             local_changes_kwargs={},
             pose_parameterization=None,
             return_bone_ends=False
