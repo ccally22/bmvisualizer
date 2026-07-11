@@ -40,6 +40,7 @@ import open3d.visualization.gui as gui
 import scipy.spatial.transform.rotation as R
 import open3d.visualization.rendering as rendering
 import roma
+import time
 # import supr as SUPR
 from SUPR.supr.pytorch.supr import SUPR
 
@@ -255,6 +256,8 @@ class AppWindow:
     IS_DRAGGING = False
     DRAG_DEPTH = None
     DRAG_JOINT = None
+    DRAG_KEY_PRESSED = False
+    DRAG_START_TIME = None
 
     DEFAULT_IBL = "default"
 
@@ -1576,6 +1579,24 @@ class AppWindow:
         )
 
     def _on_key_widget(self, event):
+        if event.key == gui.KeyName.Q:
+            if event.type == gui.KeyEvent.Type.DOWN:
+                AppWindow.DRAG_KEY_PRESSED = True
+            elif event.type == gui.KeyEvent.Type.UP:
+                AppWindow.DRAG_KEY_PRESSED = False
+
+                # IK auslösen wenn wir gerade gedraggt haben
+                if AppWindow.DRAG_DEPTH is not None:
+                    self._scene.set_view_controls(gui.SceneWidget.Controls.ROTATE_CAMERA)
+                    AppWindow.DRAG_DEPTH = None
+                    AppWindow.IS_DRAGGING = False
+
+                    bm = self._body_model.selected_text
+                    bp = self._body_pose_comp.selected_text
+                    if (bm in ['SMPL', 'SMPLX']) and (bp == 'body_pose'):
+                        self._on_run_ik()
+            return gui.Widget.EventCallbackResult.HANDLED
+
         key = gui.KeyName(event.key.real).name
         step = 0.01
         # logger.debug(f"key {key} is pressed")
@@ -1618,16 +1639,14 @@ class AppWindow:
         #     logger.debug(label_text, label_pos)
         #    # self._scene.add_3d_label(label_pos, label_text)
 
-        # BUTTON_DOWN Joint auswählen
+        # BUTTON_DOWN Event: select joint
         if event.type == gui.MouseEvent.Type.BUTTON_DOWN and \
-            event.is_modifier_down(gui.KeyModifier.SHIFT) and \
+            AppWindow.DRAG_KEY_PRESSED and \
             self._show_joints.checked:
 
-            # x = event.x - self._scene.frame.x
-            # y = event.y - self._scene.frame.y
-            # logger.debug(f'Clicked point x: {x}, y: {y}')
-
+            AppWindow.DRAG_START_TIME = time.time()
             AppWindow.IS_DRAGGING = True
+            AppWindow.DRAG_DEPTH = -1.0
             self._scene.set_view_controls(gui.SceneWidget.Controls.PICK_POINTS)  # Kamera deaktivieren
 
             def depth_callback(depth_image):
@@ -1637,8 +1656,11 @@ class AppWindow:
 
                 depth = np.asarray(depth_image)[y, x]
 
+                depth = depth_array[y, x]
+
                 if depth == 1.0:  # clicked on nothing (i.e. the far plane)
                     AppWindow.IS_DRAGGING = False
+                    AppWindow.DRAG_DEPTH = None
                     return
 
                 AppWindow.DRAG_DEPTH = depth
@@ -1651,47 +1673,56 @@ class AppWindow:
                 AppWindow.SELECTED_JOINT = np.argmin(dist)
 
                 jn = AppWindow.KEYPOINT_NAMES[self._body_model.selected_text][AppWindow.SELECTED_JOINT]
-                self._update_label(f'Dragging joint "{jn}"')
-                self._on_show_joints(show = True)
+
+                def update_ui():
+                    self._update_label(f'Dragging joint "{jn}"')
+                    self._on_show_joints(show = True)
+
+                gui.Application.instance.post_to_main_thread(self.window, update_ui)
 
             self._scene.scene.scene.render_to_depth_image(depth_callback)
             return gui.Widget.EventCallbackResult.HANDLED
 
-        # Mouse move - change joint position
+        # Mouse move Event: change joint position
         if event.type == gui.MouseEvent.Type.MOVE and \
-                AppWindow.IS_DRAGGING and \
                 AppWindow.DRAG_DEPTH is not None and \
+                AppWindow.DRAG_DEPTH != -1.0 and \
                 AppWindow.SELECTED_JOINT is not None and \
-                event.is_modifier_down(gui.KeyModifier.SHIFT):
+                AppWindow.DRAG_KEY_PRESSED:
             #and \
                # event.buttons == gui.MouseEvent.BUTTON_LEFT:
 
-            print("MOVE mit Dragging")
             x = event.x
             y = event.y
 
             world = self._scene.scene.camera.unproject(
-                x, (self._scene.frame.height - y), AppWindow.DRAG_DEPTH,
-                self._scene.frame.width, self._scene.frame.height)
+                x, y, AppWindow.DRAG_DEPTH,
+                self._scene.frame.width,
+                self._scene.frame.height)
 
             AppWindow.JOINTS[AppWindow.SELECTED_JOINT] = np.array(world[:3])
             self._on_show_joints(show = True)
 
             return gui.Widget.EventCallbackResult.HANDLED
 
-        # Button up - run IK
+        # Button up Event: run IK (update Model)
         if event.type == gui.MouseEvent.Type.BUTTON_UP:
+            elapsed = time.time() - (AppWindow.DRAG_START_TIME or 0)
 
-            if AppWindow.IS_DRAGGING and AppWindow.DRAG_DEPTH is not None:
-                AppWindow.IS_DRAGGING = False
-                self._scene.set_view_controls(gui.SceneWidget.Controls.ROTATE_CAMERA)  # Kamera wieder aktiviere
-                AppWindow.DRAG_DEPTH = None
+            if elapsed < 0.3:
+                return gui.Widget.EventCallbackResult.HANDLED
 
-                bm = self._body_model.selected_text
-                bp = self._body_pose_comp.selected_text
+            if not AppWindow.DRAG_KEY_PRESSED:
+                if AppWindow.DRAG_DEPTH is not None:
+                    self._scene.set_view_controls(gui.SceneWidget.Controls.ROTATE_CAMERA)  # Kamera wieder aktiviere
+                    AppWindow.DRAG_DEPTH = None
+                    AppWindow.IS_DRAGGING = False
 
-                if ((bm in ['SMPL', 'SMPLX']) and (bp in ('body_pose'))):
-                    self._on_run_ik()
+                    bm = self._body_model.selected_text
+                    bp = self._body_pose_comp.selected_text
+                    if ((bm in ['SMPL', 'SMPLX']) and (bp in ('body_pose'))):
+                        self._on_run_ik()
+
             return gui.Widget.EventCallbackResult.HANDLED
 
         return gui.Widget.EventCallbackResult.IGNORED
