@@ -26,8 +26,13 @@ class ANNY_WRAPPER(BodyModelWrapper):
         # erstellt die rotationsmatrix
         bones_rotmat = roma.rotvec_to_rotmat(rotvec)
         # rotation + translation = rotation aus den input parametern + 0 + der erste teil wird wieder hinzugefügt
+        # Translation aus input_params holen (nur Root-Bone bekommt sie)
+        trans_array = torch.zeros((len(bones_rotmat), 3), dtype=torch.float64)
+        if 'trans' in input_params and input_params['trans'].numel() > 0:
+            trans_array[0] = input_params['trans'][0, 0].to(torch.float64)
+
         pose_parameters = roma.Rigid(
-            bones_rotmat, torch.zeros((len(bones_rotmat), 3), dtype=torch.float64)
+            bones_rotmat, trans_array
         )[None].to_homogeneous()
 
         model_output = self._model(
