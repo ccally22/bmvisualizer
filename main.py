@@ -358,7 +358,7 @@ class AppWindow:
         },
         'ANNY' : {
             'pose': torch.zeros(1, 163, 3),
-            'trans': torch.zeros(1, 0, 3),
+            'trans': torch.zeros(1, 1, 3),
         },
         'MHR' : {
             'model_parameters': torch.zeros(1, 204)
@@ -813,6 +813,8 @@ class AppWindow:
         h = gui.Horiz(0.25 * em)  # row 2
         h.add_child(self._body_beta_reset)
         self.model_settings.add_child(h)
+
+        #Translation slider
 
         self._expression_grid = gui.VGrid(2, 0.25 * em)
         self._expression_grid.add_child(gui.Label("Exp Component"))
