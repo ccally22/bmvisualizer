@@ -1,6 +1,6 @@
 import torch
 import numpy as np
-from MHR.mhr.mhr import MHR
+from mhr.mhr import MHR
 from Wrapper.body_model_wrapper import BodyModelWrapper
 
 NUM_IDENTITY_BLENDSHAPES = 45
@@ -30,11 +30,26 @@ class MHR_WRAPPER(BodyModelWrapper):
 
         return self
 
-    def forward(self, input_params, betas=None):
-        if betas is not None:
-            self._identity_coeffs = betas.reshape(1, NUM_IDENTITY_BLENDSHAPES)
-        # pose
-        model_parameters = input_params['model_parameters']
+    def forward(self, input_params, shape_params=None):
+        if shape_params is not None:
+            n = min(shape_params.shape[1], NUM_IDENTITY_BLENDSHAPES)
+            self._identity_coeffs[0, :n] = shape_params[0, :n]
+        # Model parameters kopieren
+        model_parameters = input_params['model_parameters'].clone()
+
+        # Root Translation (Index 0, 1, 2)
+        if 'trans' in input_params and input_params['trans'].numel() > 0:
+            trans = input_params['trans'][0, 0]
+            model_parameters[0, 0] = trans[0]
+            model_parameters[0, 1] = trans[1]
+            model_parameters[0, 2] = trans[2]
+
+        # Root Rotation (Index 3, 4, 5)
+        if 'global_orient' in input_params:
+            rot = input_params['global_orient'][0, 0]
+            model_parameters[0, 3] = rot[0]
+            model_parameters[0, 4] = rot[1]
+            model_parameters[0, 5] = rot[2]
 
         with torch.no_grad():
             verts, skel_state = self._model(
