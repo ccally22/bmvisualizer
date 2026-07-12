@@ -32,7 +32,7 @@ class ANNY_WRAPPER(BodyModelWrapper):
             trans_array[0] = input_params['trans'][0, 0].to(torch.float64)
 
         pose_parameters = roma.Rigid(
-            bones_rotmat, trans_array
+        bones_rotmat, torch.zeros((len(bones_rotmat), 3), dtype=torch.float64)
         )[None].to_homogeneous()
 
         model_output = self._model(
@@ -56,6 +56,12 @@ class ANNY_WRAPPER(BodyModelWrapper):
         R = roma.euler_to_rotmat('x', [270.], degrees=True).numpy()
         verts = verts @ R.T
         joints = joints @ R.T
+
+        # Translation nach der Rotation anwenden (in User-Achsen)
+        if 'trans' in input_params and input_params['trans'].numel() > 0:
+            user_trans = input_params['trans'][0, 0].detach().numpy()
+            verts = verts + user_trans
+            joints = joints + user_trans
 
         mesh_data = (verts, joints, faces)
 
