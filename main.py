@@ -923,11 +923,14 @@ class AppWindow:
         grid.add_child(self._anny_group)
         grid.add_child(self._anny_bone_label)
         grid.add_child(self._anny_bone)
-        grid.add_child(gui.Label("rot_x"))
+        self._rot_x_label = gui.Label("rot_x")
+        grid.add_child(self._rot_x_label)
         grid.add_child(self._body_pose_joint_x)
-        grid.add_child(gui.Label("rot_y"))
+        self._rot_y_label = gui.Label("rot_y")
+        grid.add_child(self._rot_y_label)
         grid.add_child(self._body_pose_joint_y)
-        grid.add_child(gui.Label("rot_z"))
+        self._rot_z_label = gui.Label("rot_z")
+        grid.add_child(self._rot_z_label)
         grid.add_child(self._body_pose_joint_z)
         grid.add_child(gui.Label("value"))
         grid.add_child(self._body_pose_joint_val)
@@ -1275,6 +1278,13 @@ class AppWindow:
         self._body_pose_joint_y.visible = not is_mhr
         self._body_pose_joint_z.visible = not is_mhr
         self._body_pose_joint_val.visible = is_mhr
+        # Labels für rot_x/y/z auch verstecken bei MHR
+        if hasattr(self, "_rot_x_label"):
+            self._rot_x_label.visible = not is_mhr
+        if hasattr(self, "_rot_y_label"):
+            self._rot_y_label.visible = not is_mhr
+        if hasattr(self, "_rot_z_label"):
+            self._rot_z_label.visible = not is_mhr
         # ... (dein bestehender Code fuer ANNY etc. bleibt unveraendert)
         self.window.set_needs_layout()
         is_anny = body_model_name == "ANNY"
@@ -1505,11 +1515,24 @@ class AppWindow:
 
         self._body_pose_comp.clear_items()
         for k in AppWindow.POSE_PARAMS[name].keys():
+            # Bei MHR: trans und global_orient nicht im Dropdown (haben eigene Slider)
+            if name == 'MHR' and k in ('trans', 'global_orient'):
+                continue
             self._body_pose_comp.add_item(k)
 
         self._body_pose_joint.clear_items()
         joint_names = AppWindow.JOINT_NAMES[name][self._body_pose_comp.selected_text]
         for i in range(AppWindow.POSE_PARAMS[name][self._body_pose_comp.selected_text].shape[1]):
+            # Bei MHR: erste 6 (Root Trans + Rot) ausblenden (haben eigene Slider)
+            if name == 'MHR' and i < 6:
+                continue
+            # Bei MHR: Parameter mit min==max ausblenden (nicht bewegbar)
+            if name == 'MHR':
+                gender = self._body_model_gender.selected_text
+                wrapper = AppWindow.PRELOADED_BODY_MODELS[f'mhr-{gender.lower()}']
+                lo, hi = wrapper._pose_param_limits[i]
+                if lo == hi:
+                    continue
             self._body_pose_joint.add_item(f'{i}-{joint_names[i]}')
         if name == "ANNY" and self._body_pose_joint.number_of_items > 0:
             self._sync_anny_hierarchy_to_bone(0)
