@@ -365,7 +365,9 @@ class AppWindow:
             'trans': torch.zeros(1, 1, 3),
         },
         'MHR' : {
-            'model_parameters': torch.zeros(1, 204)
+            'model_parameters': torch.zeros(1, 204),
+            'global_orient': torch.zeros(1, 1, 3),
+            'trans': torch.zeros(1, 1, 3),
         }
     }
 
@@ -677,6 +679,15 @@ class AppWindow:
         self._trans_z.set_limits(-5.0, 5.0)
         self._trans_reset = gui.Button("Reset translation")
 
+        # new global rotation gui slider
+        self._rot_x = gui.Slider(gui.Slider.DOUBLE)
+        self._rot_x.set_limits(-5.0, 5.0)
+        self._rot_y = gui.Slider(gui.Slider.DOUBLE)
+        self._rot_y.set_limits(-5.0, 5.0)
+        self._rot_z = gui.Slider(gui.Slider.DOUBLE)
+        self._rot_z.set_limits(-5.0, 5.0)
+        self._rot_reset = gui.Button("Reset rotation")
+
         self._body_beta_text = gui.Label("Betas")
         self._body_beta_text.text = f",".join(f'{x:.1f}'for x in self._body_beta_tensor[0].numpy().tolist())
 
@@ -824,6 +835,12 @@ class AppWindow:
         self._trans_z.set_on_value_changed(self._on_trans_z)
         self._trans_reset.set_on_clicked(self._on_trans_reset)
 
+        # global rotation callbacks registrieren
+        self._rot_x.set_on_value_changed(self._on_rot_x)
+        self._rot_y.set_on_value_changed(self._on_rot_y)
+        self._rot_z.set_on_value_changed(self._on_rot_z)
+        self._rot_reset.set_on_clicked(self._on_rot_reset)
+
         self._scene.set_on_mouse(self._on_mouse_widget)
         self._scene.set_on_key(self._on_key_widget)
 
@@ -862,6 +879,22 @@ class AppWindow:
         h.add_child(self._trans_reset)
         self.model_settings.add_child(h)
 
+        # new global rotation UI
+        h = gui.Horiz(0.25 * em)
+        h.add_child(gui.Label("Global Rotation"))
+        self.model_settings.add_child(h)
+        grid = gui.VGrid(2, 0.25 * em)
+        grid.add_child(gui.Label("Rotate X"))
+        grid.add_child(self._rot_x)
+        grid.add_child(gui.Label("Rotate Y"))
+        grid.add_child(self._rot_y)
+        grid.add_child(gui.Label("Rotate Z"))
+        grid.add_child(self._rot_z)
+        self.model_settings.add_child(grid)
+        h = gui.Horiz(0.25 * em)
+        h.add_child(self._rot_reset)
+        self.model_settings.add_child(h)
+
         self._expression_grid = gui.VGrid(2, 0.25 * em)
         self._expression_grid.add_child(gui.Label("Exp Component"))
         self._expression_grid.add_child(self._body_model_exp_comp)
@@ -890,11 +923,14 @@ class AppWindow:
         grid.add_child(self._anny_group)
         grid.add_child(self._anny_bone_label)
         grid.add_child(self._anny_bone)
-        grid.add_child(gui.Label("rot_x"))
+        self._rot_x_label = gui.Label("rot_x")
+        grid.add_child(self._rot_x_label)
         grid.add_child(self._body_pose_joint_x)
-        grid.add_child(gui.Label("rot_y"))
+        self._rot_y_label = gui.Label("rot_y")
+        grid.add_child(self._rot_y_label)
         grid.add_child(self._body_pose_joint_y)
-        grid.add_child(gui.Label("rot_z"))
+        self._rot_z_label = gui.Label("rot_z")
+        grid.add_child(self._rot_z_label)
         grid.add_child(self._body_pose_joint_z)
         grid.add_child(gui.Label("value"))
         grid.add_child(self._body_pose_joint_val)
@@ -1242,6 +1278,13 @@ class AppWindow:
         self._body_pose_joint_y.visible = not is_mhr
         self._body_pose_joint_z.visible = not is_mhr
         self._body_pose_joint_val.visible = is_mhr
+        # Labels für rot_x/y/z auch verstecken bei MHR
+        if hasattr(self, "_rot_x_label"):
+            self._rot_x_label.visible = not is_mhr
+        if hasattr(self, "_rot_y_label"):
+            self._rot_y_label.visible = not is_mhr
+        if hasattr(self, "_rot_z_label"):
+            self._rot_z_label.visible = not is_mhr
         # ... (dein bestehender Code fuer ANNY etc. bleibt unveraendert)
         self.window.set_needs_layout()
         is_anny = body_model_name == "ANNY"
@@ -1472,11 +1515,24 @@ class AppWindow:
 
         self._body_pose_comp.clear_items()
         for k in AppWindow.POSE_PARAMS[name].keys():
+            # Bei MHR: trans und global_orient nicht im Dropdown (haben eigene Slider)
+            if name == 'MHR' and k in ('trans', 'global_orient'):
+                continue
             self._body_pose_comp.add_item(k)
 
         self._body_pose_joint.clear_items()
         joint_names = AppWindow.JOINT_NAMES[name][self._body_pose_comp.selected_text]
         for i in range(AppWindow.POSE_PARAMS[name][self._body_pose_comp.selected_text].shape[1]):
+            # Bei MHR: erste 6 (Root Trans + Rot) ausblenden (haben eigene Slider)
+            if name == 'MHR' and i < 6:
+                continue
+            # Bei MHR: Parameter mit min==max ausblenden (nicht bewegbar)
+            if name == 'MHR':
+                gender = self._body_model_gender.selected_text
+                wrapper = AppWindow.PRELOADED_BODY_MODELS[f'mhr-{gender.lower()}']
+                lo, hi = wrapper._pose_param_limits[i]
+                if lo == hi:
+                    continue
             self._body_pose_joint.add_item(f'{i}-{joint_names[i]}')
         if name == "ANNY" and self._body_pose_joint.number_of_items > 0:
             self._sync_anny_hierarchy_to_bone(0)
@@ -1579,6 +1635,13 @@ class AppWindow:
         bp = self._body_pose_comp.selected_text
         ji = int(self._body_pose_joint.selected_text.split('-')[0])
         AppWindow.POSE_PARAMS[bm][bp][0, ji] = float(val)
+
+        # MHR: Root-Translation/Rotation Sync mit trans/global_orient
+        if bm == 'MHR':
+            if ji in [0, 1, 2]:
+                AppWindow.POSE_PARAMS['MHR']['trans'][0, 0, ji] = float(val)
+            elif ji in [3, 4, 5]:
+                AppWindow.POSE_PARAMS['MHR']['global_orient'][0, 0, ji - 3] = float(val)
 
         self.load_body_model(
             self._body_model.selected_text,
@@ -1711,6 +1774,64 @@ class AppWindow:
             self._body_model.selected_text,
             gender=self._body_model_gender.selected_text,
         )
+
+    # NEW GLOBAL ROTATION
+    def _on_rot_x(self, val):
+        bm = self._body_model.selected_text
+        if "global_orient" not in AppWindow.POSE_PARAMS[bm]:
+            return
+        AppWindow.POSE_PARAMS[bm]["global_orient"][0, 0, 0] = val
+        # MHR: auch model_parameters sync (Index 3)
+        if bm == 'MHR':
+            AppWindow.POSE_PARAMS['MHR']['model_parameters'][0, 3] = val
+        self.load_body_model(
+            self._body_model.selected_text,
+            gender=self._body_model_gender.selected_text,
+        )
+
+    def _on_rot_y(self, val):
+        bm = self._body_model.selected_text
+        if "global_orient" not in AppWindow.POSE_PARAMS[bm]:
+            return
+        AppWindow.POSE_PARAMS[bm]["global_orient"][0, 0, 1] = val
+        if bm == 'MHR':
+            AppWindow.POSE_PARAMS['MHR']['model_parameters'][0, 4] = val
+        self.load_body_model(
+            self._body_model.selected_text,
+            gender=self._body_model_gender.selected_text,
+        )
+
+    def _on_rot_z(self, val):
+        bm = self._body_model.selected_text
+        if "global_orient" not in AppWindow.POSE_PARAMS[bm]:
+            return
+        AppWindow.POSE_PARAMS[bm]["global_orient"][0, 0, 2] = val
+        if bm == 'MHR':
+            AppWindow.POSE_PARAMS['MHR']['model_parameters'][0, 5] = val
+        self.load_body_model(
+            self._body_model.selected_text,
+            gender=self._body_model_gender.selected_text,
+        )
+
+    def _on_rot_reset(self):
+        bm = self._body_model.selected_text
+        if "global_orient" not in AppWindow.POSE_PARAMS[bm]:
+            return
+        AppWindow.POSE_PARAMS[bm]["global_orient"] = torch.zeros_like(
+            AppWindow.POSE_PARAMS[bm]["global_orient"]
+        )
+        if bm == 'MHR':
+            AppWindow.POSE_PARAMS['MHR']['model_parameters'][0, 3] = 0.0
+            AppWindow.POSE_PARAMS['MHR']['model_parameters'][0, 4] = 0.0
+            AppWindow.POSE_PARAMS['MHR']['model_parameters'][0, 5] = 0.0
+        self._rot_x.double_value = 0.0
+        self._rot_y.double_value = 0.0
+        self._rot_z.double_value = 0.0
+        self.load_body_model(
+            self._body_model.selected_text,
+            gender=self._body_model_gender.selected_text,
+        )
+    # NEW END
 
     def _on_key_widget(self, event):
         key = gui.KeyName(event.key.real).name
