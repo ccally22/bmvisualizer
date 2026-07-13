@@ -1095,6 +1095,17 @@ class AppWindow:
                     self._scene.remove_3d_label(label3d)
 
     def _on_show_joints(self, show):
+
+        if self._scene.scene.has_geometry("__body_model__"):
+            mat_body = rendering.MaterialRecord()
+            if show:
+                mat_body.shader = "defaultLitTransparency"
+                mat_body.base_color = [0.5, 0.5, 0.5, 0.4]
+            else:
+                mat_body.shader = "defaultLit"
+                mat_body.base_color = [0.5, 0.5, 0.5, 1.0]
+            self._scene.scene.modify_geometry_material("__body_model__", mat_body)
+
         joints = AppWindow.JOINTS
         num_joints = joints.shape[0] if joints is not None else 0
         bm = self._body_model.selected_text
