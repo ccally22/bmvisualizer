@@ -1206,7 +1206,7 @@ class AppWindow:
             hand_radius = 0.01
             foot_radius = 0.01
             head_radius = 0.007
-            body_radius = 0.05
+            body_radius = 0.025
         # joint_names = AppWindow.KEYPOINT_NAMES[self._body_model.selected_text]
 
         
