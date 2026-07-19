@@ -910,6 +910,12 @@ class AppWindow:
         self._expression_grid.add_child(self._body_exp_val)
         self.model_settings.add_child(self._expression_grid)
 
+        # show joints button
+        h = gui.Horiz(0.25 * em)  # row 2
+        h.add_child(self._show_joints)
+        h.add_child(self._show_joint_labels)
+        self.model_settings.add_child(h)
+
         # grid.add_child(gui.Label("Beta"))
         # grid.add_child(self._body_beta_text)
         # grid.add_child(gui.Label("reset"))
