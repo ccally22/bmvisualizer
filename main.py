@@ -696,6 +696,12 @@ class AppWindow:
         self._rot_z.set_limits(-5.0, 5.0)
         self._rot_reset = gui.Button("Reset rotation")
 
+        # new transparency slider
+        self._transparency = gui.Slider(gui.Slider.DOUBLE)
+        self._transparency.set_limits(0.0, 1.0)
+        self._transparency.double_value = 0.0
+        self._transparency_reset = gui.Button("Reset Transparency")
+
         self._body_beta_text = gui.Label("Betas")
         self._body_beta_text.text = f",".join(f'{x:.1f}'for x in self._body_beta_tensor[0].numpy().tolist())
 
@@ -834,7 +840,6 @@ class AppWindow:
         self._body_pose_joint_z.set_on_value_changed(self._on_body_pose_joint_z)
         self._body_pose_joint_val.set_on_value_changed(self._on_body_pose_joint_val)
 
-
         self._body_pose_ik.set_on_clicked(self._on_run_ik)
 
         # translation callbacks registrieren
@@ -848,6 +853,10 @@ class AppWindow:
         self._rot_y.set_on_value_changed(self._on_rot_y)
         self._rot_z.set_on_value_changed(self._on_rot_z)
         self._rot_reset.set_on_clicked(self._on_rot_reset)
+
+        # transparency callbacks registrieren
+        self._transparency.set_on_value_changed(self._on_transparency)
+        self._transparency_reset.set_on_clicked(self._on_transparency_reset)
 
         self._scene.set_on_mouse(self._on_mouse_widget)
         self._scene.set_on_key(self._on_key_widget)
@@ -915,6 +924,24 @@ class AppWindow:
         h.add_child(self._show_joints)
         h.add_child(self._show_joint_labels)
         self.model_settings.add_child(h)
+
+        # abstand hinzufuegen
+        self.model_settings.add_fixed(em)
+
+        # transparency slider
+        h = gui.Horiz(0.25 * em)
+        self.model_settings.add_child(h)
+        grid = gui.VGrid(2, 0.25 * em)
+        grid.add_child(gui.Label("Transparancy"))
+        grid.add_child(self._transparency)
+        self.model_settings.add_child(grid)
+        self.model_settings.add_fixed(0.5 * em)
+        h = gui.Horiz(0.25 * em)
+        h.add_child(self._transparency_reset)
+        self.model_settings.add_child(h)
+
+        # abstand hinzufuegen
+        self.model_settings.add_fixed(em)
 
         # grid.add_child(gui.Label("Beta"))
         # grid.add_child(self._body_beta_text)
@@ -1181,7 +1208,7 @@ class AppWindow:
             mat_body = rendering.MaterialRecord()
             if show:
                 mat_body.shader = "defaultLitTransparency"
-                mat_body.base_color = [0.5, 0.5, 0.5, 0.4]
+                mat_body.base_color = [0.5, 0.5, 0.5, 0.8]
             else:
                 mat_body.shader = "defaultLit"
                 mat_body.base_color = [0.5, 0.5, 0.5, 1.0]
@@ -1201,7 +1228,7 @@ class AppWindow:
             hand_radius = 0.005
             foot_radius = 0.005
             head_radius = 0.004
-            body_radius = 0.01
+            body_radius = 0.05
         else:
             hand_radius = 0.01
             foot_radius = 0.01
@@ -1587,7 +1614,6 @@ class AppWindow:
             self._body_model.selected_text,
             gender=self._body_model_gender.selected_text,
         )
-        # self._on_show_joints(self._show_joints.checked)
 
     def _on_body_exp_val(self, val):
         self._body_exp_tensor[0, int(self._body_model_exp_comp.selected_text)-1] = float(val)
@@ -1596,7 +1622,6 @@ class AppWindow:
             self._body_model.selected_text,
             gender=self._body_model_gender.selected_text,
         )
-        # self._on_show_joints(self._show_joints.checked)
 
     def _on_body_pose_joint(self, name, index):
         self._reset_rot_sliders()
@@ -1625,7 +1650,6 @@ class AppWindow:
             self._body_model.selected_text,
             gender=self._body_model_gender.selected_text,
         )
-        # self._on_show_joints(self._show_joints.checked)
 
     def _on_body_pose_joint_y(self, val):
         bm = self._body_model.selected_text
@@ -1639,7 +1663,6 @@ class AppWindow:
             self._body_model.selected_text,
             gender=self._body_model_gender.selected_text,
         )
-        # self._on_show_joints(self._show_joints.checked)
 
     def _on_body_pose_joint_z(self, val):
         bm = self._body_model.selected_text
@@ -1653,7 +1676,6 @@ class AppWindow:
             self._body_model.selected_text,
             gender=self._body_model_gender.selected_text,
         )
-        # self._on_show_joints(self._show_joints.checked)
 
     def _on_body_pose_joint_val(self, val):
         bm = self._body_model.selected_text
@@ -1858,6 +1880,21 @@ class AppWindow:
         )
     # NEW END
 
+    def _on_transparency(self, val):
+        if self._scene.scene.has_geometry("__body_model__"):
+            mat_body = rendering.MaterialRecord()
+            mat_body.shader = "defaultLitTransparency"
+            mat_body.base_color = [0.5, 0.5, 0.5, 1 - val]
+            self._scene.scene.modify_geometry_material("__body_model__", mat_body)
+
+    def _on_transparency_reset(self):
+        if self._scene.scene.has_geometry("__body_model__"):
+            mat_body = rendering.MaterialRecord()
+            mat_body.shader = "defaultLit"
+            mat_body.base_color = [0.5, 0.5, 0.5, 1.0]
+            self._scene.scene.modify_geometry_material("__body_model__", mat_body)
+        self._transparency.double_value = 0.0
+
     def _on_key_widget(self, event):
         if event.key == gui.KeyName.Q:
             if event.type == gui.KeyEvent.Type.DOWN:
@@ -1905,24 +1942,15 @@ class AppWindow:
         # We could override BUTTON_DOWN without a modifier, but that would
         # interfere with manipulating the scene.
 
-        # self.joint_label_3d.text = ""
-        # if self._show_joints.checked:
-        #     mouse_pos = self._scene.scene.camera.unproject(
-        #         event.x, (self._scene.frame.height - event.y), 0.1, self._scene.frame.width,
-        #         self._scene.frame.height)
-        #     # logger.debug(mouse_pos)
-        #     label_idx = np.argmin(((AppWindow.JOINTS - mouse_pos) ** 2).sum(1))
-        #     label_text = AppWindow.KEYPOINT_NAMES[self._body_model.selected_text][label_idx]
-        #     label_pos = AppWindow.JOINTS[label_idx]
-        #     self.joint_label_3d.text = label_text
-        #     self.joint_label_3d.position = label_pos
-        #     logger.debug(label_text, label_pos)
-        #    # self._scene.add_3d_label(label_pos, label_text)
-
         # BUTTON_DOWN Event: select joint
         if event.type == gui.MouseEvent.Type.BUTTON_DOWN and \
             AppWindow.DRAG_KEY_PRESSED and \
             self._show_joints.checked:
+
+            bm = self._body_model.selected_text
+            if (not (bm in ['SMPL', 'SMPLX'])):
+                self._update_label(f'joint dragging not implemented')
+                return
 
             AppWindow.DRAG_START_TIME = time.time()
             AppWindow.IS_DRAGGING = True
