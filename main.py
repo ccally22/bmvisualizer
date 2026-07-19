@@ -40,6 +40,7 @@ import open3d.visualization.gui as gui
 import scipy.spatial.transform.rotation as R
 import open3d.visualization.rendering as rendering
 import roma
+import time
 # import supr as SUPR
 from SUPR.supr.pytorch.supr import SUPR
 
@@ -256,6 +257,13 @@ class AppWindow:
     MENU_SAVE = 4
     MENU_SHOW_SETTINGS = 11
     MENU_ABOUT = 21
+
+    # for mouse dragging joint feature
+    IS_DRAGGING = False
+    DRAG_DEPTH = None
+    DRAG_JOINT = None
+    DRAG_KEY_PRESSED = False
+    DRAG_START_TIME = None
 
     DEFAULT_IBL = "default"
 
@@ -1162,6 +1170,17 @@ class AppWindow:
                     self._scene.remove_3d_label(label3d)
 
     def _on_show_joints(self, show):
+
+        if self._scene.scene.has_geometry("__body_model__"):
+            mat_body = rendering.MaterialRecord()
+            if show:
+                mat_body.shader = "defaultLitTransparency"
+                mat_body.base_color = [0.5, 0.5, 0.5, 0.4]
+            else:
+                mat_body.shader = "defaultLit"
+                mat_body.base_color = [0.5, 0.5, 0.5, 1.0]
+            self._scene.scene.modify_geometry_material("__body_model__", mat_body)
+
         joints = AppWindow.JOINTS
         num_joints = joints.shape[0] if joints is not None else 0
         bm = self._body_model.selected_text
@@ -1834,6 +1853,24 @@ class AppWindow:
     # NEW END
 
     def _on_key_widget(self, event):
+        if event.key == gui.KeyName.Q:
+            if event.type == gui.KeyEvent.Type.DOWN:
+                AppWindow.DRAG_KEY_PRESSED = True
+            elif event.type == gui.KeyEvent.Type.UP:
+                AppWindow.DRAG_KEY_PRESSED = False
+
+                # IK auslösen wenn wir gerade gedraggt haben
+                if AppWindow.DRAG_DEPTH is not None:
+                    self._scene.set_view_controls(gui.SceneWidget.Controls.ROTATE_CAMERA)
+                    AppWindow.DRAG_DEPTH = None
+                    AppWindow.IS_DRAGGING = False
+
+                    bm = self._body_model.selected_text
+                    bp = self._body_pose_comp.selected_text
+                    if (bm in ['SMPL', 'SMPLX']) and (bp == 'body_pose'):
+                        self._on_run_ik()
+            return gui.Widget.EventCallbackResult.HANDLED
+
         key = gui.KeyName(event.key.real).name
         step = 0.01
         # logger.debug(f"key {key} is pressed")
@@ -1874,77 +1911,96 @@ class AppWindow:
         #     self.joint_label_3d.text = label_text
         #     self.joint_label_3d.position = label_pos
         #     logger.debug(label_text, label_pos)
-            # self._scene.add_3d_label(label_pos, label_text)
+        #    # self._scene.add_3d_label(label_pos, label_text)
 
-        if event.type == gui.MouseEvent.Type.BUTTON_DOWN and event.is_modifier_down(
-                gui.KeyModifier.CTRL) and self._show_joints.checked:
-            # x = event.x - self._scene.frame.x
-            # y = event.y - self._scene.frame.y
-            # logger.debug(f'Clicked point x: {x}, y: {y}')
+        # BUTTON_DOWN Event: select joint
+        if event.type == gui.MouseEvent.Type.BUTTON_DOWN and \
+            AppWindow.DRAG_KEY_PRESSED and \
+            self._show_joints.checked:
+
+            AppWindow.DRAG_START_TIME = time.time()
+            AppWindow.IS_DRAGGING = True
+            AppWindow.DRAG_DEPTH = -1.0
+            self._scene.set_view_controls(gui.SceneWidget.Controls.PICK_POINTS)  # Kamera deaktivieren
 
             def depth_callback(depth_image):
-                # Coordinates are expressed in absolute coordinates of the
-                # window, but to dereference the image correctly we need them
-                # relative to the origin of the widget. Note that even if the
-                # scene widget is the only thing in the window, if a menubar
-                # exists it also takes up space in the window (except on macOS).
-                x = event.x # - self._scene.frame.x
-                y = event.y # - self._scene.frame.y
-                # logger.debug(f'Clicked point x: {x}, y: {y}')
-                # Note that np.asarray() reverses the axes.
+                depth_array = np.asarray(depth_image)
+                x = event.x
+                y = event.y
+
                 depth = np.asarray(depth_image)[y, x]
-                # import skimage.io as io
-                # io.imsave('depth_img.jpg', np.asarray(depth_image))
+
+                depth = depth_array[y, x]
 
                 if depth == 1.0:  # clicked on nothing (i.e. the far plane)
-                    text = ""
-                else:
-                    # world = self._scene.scene.camera.unproject(
-                    #     event.x, event.y, depth, self._scene.frame.width,
-                    #     self._scene.frame.height)
-                    world = self._scene.scene.camera.unproject(
-                        x, (self._scene.frame.height - y), depth, self._scene.frame.width,
-                        self._scene.frame.height)
+                    AppWindow.IS_DRAGGING = False
+                    AppWindow.DRAG_DEPTH = None
+                    return
 
-                    # logger.debug(f'cam pose {self._scene.scene.camera.get_model_matrix()[:3, 3].tolist()}')
-                    # logger.debug(world)
-                    # cam_x = self._scene.scene.camera.get_model_matrix()[:3, 3][0]
-                    # cam_y = self._scene.scene.camera.get_model_matrix()[:3, 3][1]
-                    # text = "({:.3f}, {:.3f}, {:.3f})".format(
-                    #     world[0], world[1], world[2])
-                    # logger.debug(f'Clicked {text}')
+                AppWindow.DRAG_DEPTH = depth
+                world = self._scene.scene.camera.unproject(
+                    x, y, depth, depth_array.shape[1],
+                    depth_array.shape[0])
 
-                    # find the closest joint to the clicked pos
-                    dist = ((AppWindow.JOINTS - np.array([world[0], world[1], world[2]]))**2).sum(1)
-                    AppWindow.SELECTED_JOINT = np.argmin(dist)
-                    # logger.debug(AppWindow.SELECTED_JOINT)
-                    jn = AppWindow.KEYPOINT_NAMES[self._body_model.selected_text][AppWindow.SELECTED_JOINT]
-                    self._update_label(f'{self._body_model.selected_text} joint "{jn}" selected')
-                    self._scene.remove_3d_label(self.joint_label_3d)
-                    self.joint_label_3d = self._scene.add_3d_label(
-                        AppWindow.JOINTS[AppWindow.SELECTED_JOINT],
-                        AppWindow.KEYPOINT_NAMES[self._body_model.selected_text][AppWindow.SELECTED_JOINT]
-                    )
-                    # self.joint_label_3d.text = jn
-                    # self.joint_label_3d.position = AppWindow.JOINTS[AppWindow.SELECTED_JOINT]
-                    self._on_show_joints(show=True)
+                # find the closest joint to the clicked pos
+                dist = ((AppWindow.JOINTS - np.array([world[0], world[1], world[2]]))**2).sum(1)
+                AppWindow.SELECTED_JOINT = np.argmin(dist)
 
-                # This is not called on the main thread, so we need to
-                # post to the main thread to safely access UI items.
-                # def update_label():
-                #     self.info.text = text
-                #     self.info.visible = (text != "")
-                #     # We are sizing the info label to be exactly the right size,
-                #     # so since the text likely changed width, we need to
-                #     # re-layout to set the new frame.
-                #     self.window.set_needs_layout()
+                jn = AppWindow.KEYPOINT_NAMES[self._body_model.selected_text][AppWindow.SELECTED_JOINT]
 
-                # gui.Application.instance.post_to_main_thread(
-                #     self.window, update_label)
+                def update_ui():
+                    self._update_label(f'Dragging joint "{jn}"')
+                    self._on_show_joints(show = True)
+
+                gui.Application.instance.post_to_main_thread(self.window, update_ui)
 
             self._scene.scene.scene.render_to_depth_image(depth_callback)
             return gui.Widget.EventCallbackResult.HANDLED
+
+        # Mouse move Event: change joint position
+        if event.type == gui.MouseEvent.Type.MOVE and \
+                AppWindow.DRAG_DEPTH is not None and \
+                AppWindow.DRAG_DEPTH != -1.0 and \
+                AppWindow.SELECTED_JOINT is not None and \
+                AppWindow.DRAG_KEY_PRESSED:
+            #and \
+               # event.buttons == gui.MouseEvent.BUTTON_LEFT:
+
+            x = event.x
+            y = event.y
+
+            world = self._scene.scene.camera.unproject(
+                x, y, AppWindow.DRAG_DEPTH,
+                self._scene.frame.width,
+                self._scene.frame.height)
+
+            AppWindow.JOINTS[AppWindow.SELECTED_JOINT] = np.array(world[:3])
+            self._on_show_joints(show = True)
+
+            return gui.Widget.EventCallbackResult.HANDLED
+
+        # Button up Event: run IK (update Model)
+        if event.type == gui.MouseEvent.Type.BUTTON_UP:
+            elapsed = time.time() - (AppWindow.DRAG_START_TIME or 0)
+
+            if elapsed < 0.3:
+                return gui.Widget.EventCallbackResult.HANDLED
+
+            if not AppWindow.DRAG_KEY_PRESSED:
+                if AppWindow.DRAG_DEPTH is not None:
+                    self._scene.set_view_controls(gui.SceneWidget.Controls.ROTATE_CAMERA)  # Kamera wieder aktiviere
+                    AppWindow.DRAG_DEPTH = None
+                    AppWindow.IS_DRAGGING = False
+
+                    bm = self._body_model.selected_text
+                    bp = self._body_pose_comp.selected_text
+                    if ((bm in ['SMPL', 'SMPLX']) and (bp in ('body_pose'))):
+                        self._on_run_ik()
+
+            return gui.Widget.EventCallbackResult.HANDLED
+
         return gui.Widget.EventCallbackResult.IGNORED
+
 
     def _update_label(self, text):
         self.info.text = text
