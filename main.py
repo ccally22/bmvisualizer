@@ -722,6 +722,8 @@ class AppWindow:
         # ------- BODY MODEL POSE SETTINGS ------- #
         self._body_pose_comp = gui.Combobox()
         for k in AppWindow.POSE_PARAMS[AppWindow.BODY_MODEL_NAMES[0]].keys():
+            if k == 'trans':
+                continue
             self._body_pose_comp.add_item(k)
 
         self._body_pose_joint = gui.Combobox()
@@ -1567,8 +1569,11 @@ class AppWindow:
 
         self._body_pose_comp.clear_items()
         for k in AppWindow.POSE_PARAMS[name].keys():
-            # Bei MHR: trans und global_orient nicht im Dropdown (haben eigene Slider)
-            if name == 'MHR' and k in ('trans', 'global_orient'):
+            # trans wird über die globalen Translation-Slider gesteuert.
+            if k == 'trans':
+                continue
+            # Bei MHR: global_orient zusätzlich nicht im Dropdown (hat eigene Slider)
+            if name == 'MHR' and k == 'global_orient':
                 continue
             self._body_pose_comp.add_item(k)
 
