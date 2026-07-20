@@ -327,6 +327,9 @@ class AppWindow:
         "Other",
     ]
     CAM_FIRST = True
+    # speichern fuer den camera reset button
+    CAM_BOUNDS = None
+    CAM_CENTER = None
 
     PRELOADED_BODY_MODELS = {}
 
@@ -700,7 +703,10 @@ class AppWindow:
         self._transparency = gui.Slider(gui.Slider.DOUBLE)
         self._transparency.set_limits(0.0, 1.0)
         self._transparency.double_value = 0.0
-        self._transparency_reset = gui.Button("Reset Transparency")
+        self._transparency_reset = gui.Button("Reset transparency")
+
+        # reset kamera button
+        self._camera_reset = gui.Button("Reset camera")
 
         self._body_beta_text = gui.Label("Betas")
         self._body_beta_text.text = f",".join(f'{x:.1f}'for x in self._body_beta_tensor[0].numpy().tolist())
@@ -860,6 +866,9 @@ class AppWindow:
         self._transparency.set_on_value_changed(self._on_transparency)
         self._transparency_reset.set_on_clicked(self._on_transparency_reset)
 
+        # reset camera callbacks registrieren
+        self._camera_reset.set_on_clicked(self._on_camera_reset)
+
         self._scene.set_on_mouse(self._on_mouse_widget)
         self._scene.set_on_key(self._on_key_widget)
 
@@ -940,6 +949,13 @@ class AppWindow:
         self.model_settings.add_fixed(0.5 * em)
         h = gui.Horiz(0.25 * em)
         h.add_child(self._transparency_reset)
+        self.model_settings.add_child(h)
+
+        self.model_settings.add_fixed(em)
+
+        # camera reset button
+        h = gui.Horiz(0.25 * em)
+        h.add_child(self._camera_reset)
         self.model_settings.add_child(h)
 
         # abstand hinzufuegen
@@ -1234,7 +1250,7 @@ class AppWindow:
         else:
             hand_radius = 0.01
             foot_radius = 0.01
-            head_radius = 0.007
+            head_radius = 0.004
             body_radius = 0.025
         # joint_names = AppWindow.KEYPOINT_NAMES[self._body_model.selected_text]
 
@@ -1262,18 +1278,33 @@ class AppWindow:
                 elif joint_name in FOOT_KEYPOINT_NAMES:
                     radius = foot_radius
 
-                sg = o3d.geometry.TriangleMesh.create_sphere(radius=radius)
-                sg.compute_vertex_normals()
-                # if i == AppWindow.SELECTED_JOINT:
-                #     sg.paint_uniform_color(green)
-                # else:
-                #     sg.paint_uniform_color(red)
-                sg.translate(joints[i])
-                if (AppWindow.SELECTED_JOINT is not None) and (i == AppWindow.SELECTED_JOINT):
-                    self._scene.scene.add_geometry(f"__joints_{i}__", sg, mat_selected)
-                else:
-                    self._scene.scene.add_geometry(f"__joints_{i}__", sg, mat)
+                current_mat = mat_selected if (AppWindow.SELECTED_JOINT is not None) and (i == AppWindow.SELECTED_JOINT)\
+                    else mat
 
+                transform = np.eye(4)
+                transform[:3, 3] = joints[i]
+
+                if self._scene.scene.has_geometry(f"__joints_{i}__"):
+                    self._scene.scene.set_geometry_transform(f"__joints_{i}__", transform)
+                    self._scene.scene.modify_geometry_material(f"__joints_{i}__", current_mat)
+                else:
+                    sg = o3d.geometry.TriangleMesh.create_sphere(radius=radius)
+                    sg.compute_vertex_normals()
+                    sg.translate(joints[i])
+                    self._scene.scene.add_geometry(f"__joints_{i}__", sg, current_mat)
+
+                #sg = o3d.geometry.TriangleMesh.create_sphere(radius=radius)
+                #sg.compute_vertex_normals()
+
+                #sg.translate(joints[i])
+                #if (AppWindow.SELECTED_JOINT is not None) and (i == AppWindow.SELECTED_JOINT):
+                #    self._scene.scene.add_geometry(f"__joints_{i}__", sg, mat_selected)
+                #else:
+                #    self._scene.scene.add_geometry(f"__joints_{i}__", sg, mat)
+                # nur joints loeschen die man nicht braucht
+            for i in range(num_joints, 300):
+                if self._scene.scene.has_geometry(f"__joints_{i}__"):
+                    self._scene.scene.remove_geometry(f"__joints_{i}__")
             # logger.debug(AppWindow.JOINTS[20])
         else:
  
@@ -1900,6 +1931,10 @@ class AppWindow:
             self._scene.scene.modify_geometry_material("__body_model__", mat_body)
         self._transparency.double_value = 0.0
 
+    def _on_camera_reset(self):
+        if AppWindow.CAM_FIRST is not None:
+            self._scene.setup_camera(60, AppWindow.CAM_BOUNDS, AppWindow.CAM_CENTER)
+
     def _on_key_widget(self, event):
         if event.key == gui.KeyName.Q:
             if event.type == gui.KeyEvent.Type.DOWN:
@@ -1953,7 +1988,8 @@ class AppWindow:
             self._show_joints.checked:
 
             bm = self._body_model.selected_text
-            if (not (bm in ['SMPL', 'SMPLX'])):
+            # wieso stürzt immer noch ab?
+            if not (bm in ['SMPL', 'SMPLX']):
                 self._update_label(f'joint dragging not implemented')
                 return
 
@@ -2333,6 +2369,8 @@ class AppWindow:
         if AppWindow.CAM_FIRST:
             self._scene.setup_camera(60, bounds, bounds.get_center())
             AppWindow.CAM_FIRST = False
+            AppWindow.CAM_BOUNDS = bounds
+            AppWindow.CAM_CENTER = bounds.get_center()
 
         AppWindow.BODY_TRANSL = torch.tensor([[0, ground_offset, 0]])
         self._on_show_joints(self._show_joints.checked)
