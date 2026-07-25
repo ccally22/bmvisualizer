@@ -2361,6 +2361,9 @@ class AppWindow:
             if body_model == 'ANNY':
                 mesh_data = wrapper.forward(input_params, self._anny_phenotype_values)
             else:
+                # Expression an MHR mitgeben
+                if body_model == 'MHR':
+                    input_params['expression'] = self._body_exp_tensor
                 mesh_data = wrapper.forward(input_params, self._body_beta_tensor)
             
             verts = mesh_data[0]
