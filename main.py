@@ -1572,17 +1572,6 @@ class AppWindow:
         #self.load_body_model(name)
         self._set_model_specific_ui_visibility(name)
 
-        # Translation-Slider Limits modellspezifisch anpassen
-        if name == 'MANO':
-            trans_limit = 0.5   # 50cm für Hand
-        elif name == 'FLAME':
-            trans_limit = 0.7   # 70cm für Gesicht
-        else:
-            trans_limit = 5.0   # 5m für Ganzkörper
-        self._trans_x.set_limits(-trans_limit, trans_limit)
-        self._trans_y.set_limits(-trans_limit, trans_limit)
-        self._trans_z.set_limits(-trans_limit, trans_limit)
-
         # treat anny phenotypes like smpl betas
         self._body_model_shape_comp.clear_items()
 
@@ -1872,12 +1861,10 @@ class AppWindow:
     # NEW GLOBAL ROTATION
     def _on_rot_x(self, val):
         bm = self._body_model.selected_text
-        # Modelle mit global_orient: SMPL, SMPLX, MANO, FLAME, MHR
         if "global_orient" in AppWindow.POSE_PARAMS[bm]:
             AppWindow.POSE_PARAMS[bm]["global_orient"][0, 0, 0] = val
             if bm == 'MHR':
                 AppWindow.POSE_PARAMS['MHR']['model_parameters'][0, 3] = val
-        # Modelle mit pose[0] als Root: SUPR, STAR, ANNY
         elif "pose" in AppWindow.POSE_PARAMS[bm]:
             AppWindow.POSE_PARAMS[bm]["pose"][0, 0, 0] = val
         else:
@@ -1889,11 +1876,14 @@ class AppWindow:
 
     def _on_rot_y(self, val):
         bm = self._body_model.selected_text
-        if "global_orient" not in AppWindow.POSE_PARAMS[bm]:
+        if "global_orient" in AppWindow.POSE_PARAMS[bm]:
+            AppWindow.POSE_PARAMS[bm]["global_orient"][0, 0, 1] = val
+            if bm == 'MHR':
+                AppWindow.POSE_PARAMS['MHR']['model_parameters'][0, 4] = val
+        elif "pose" in AppWindow.POSE_PARAMS[bm]:
+            AppWindow.POSE_PARAMS[bm]["pose"][0, 0, 1] = val
+        else:
             return
-        AppWindow.POSE_PARAMS[bm]["global_orient"][0, 0, 1] = val
-        if bm == 'MHR':
-            AppWindow.POSE_PARAMS['MHR']['model_parameters'][0, 4] = val
         self.load_body_model(
             self._body_model.selected_text,
             gender=self._body_model_gender.selected_text,
@@ -1901,11 +1891,14 @@ class AppWindow:
 
     def _on_rot_z(self, val):
         bm = self._body_model.selected_text
-        if "global_orient" not in AppWindow.POSE_PARAMS[bm]:
+        if "global_orient" in AppWindow.POSE_PARAMS[bm]:
+            AppWindow.POSE_PARAMS[bm]["global_orient"][0, 0, 2] = val
+            if bm == 'MHR':
+                AppWindow.POSE_PARAMS['MHR']['model_parameters'][0, 5] = val
+        elif "pose" in AppWindow.POSE_PARAMS[bm]:
+            AppWindow.POSE_PARAMS[bm]["pose"][0, 0, 2] = val
+        else:
             return
-        AppWindow.POSE_PARAMS[bm]["global_orient"][0, 0, 2] = val
-        if bm == 'MHR':
-            AppWindow.POSE_PARAMS['MHR']['model_parameters'][0, 5] = val
         self.load_body_model(
             self._body_model.selected_text,
             gender=self._body_model_gender.selected_text,
@@ -1913,15 +1906,20 @@ class AppWindow:
 
     def _on_rot_reset(self):
         bm = self._body_model.selected_text
-        if "global_orient" not in AppWindow.POSE_PARAMS[bm]:
+        if "global_orient" in AppWindow.POSE_PARAMS[bm]:
+            AppWindow.POSE_PARAMS[bm]["global_orient"] = torch.zeros_like(
+                AppWindow.POSE_PARAMS[bm]["global_orient"]
+            )
+            if bm == 'MHR':
+                AppWindow.POSE_PARAMS['MHR']['model_parameters'][0, 3] = 0.0
+                AppWindow.POSE_PARAMS['MHR']['model_parameters'][0, 4] = 0.0
+                AppWindow.POSE_PARAMS['MHR']['model_parameters'][0, 5] = 0.0
+        elif "pose" in AppWindow.POSE_PARAMS[bm]:
+            AppWindow.POSE_PARAMS[bm]["pose"][0, 0, 0] = 0.0
+            AppWindow.POSE_PARAMS[bm]["pose"][0, 0, 1] = 0.0
+            AppWindow.POSE_PARAMS[bm]["pose"][0, 0, 2] = 0.0
+        else:
             return
-        AppWindow.POSE_PARAMS[bm]["global_orient"] = torch.zeros_like(
-            AppWindow.POSE_PARAMS[bm]["global_orient"]
-        )
-        if bm == 'MHR':
-            AppWindow.POSE_PARAMS['MHR']['model_parameters'][0, 3] = 0.0
-            AppWindow.POSE_PARAMS['MHR']['model_parameters'][0, 4] = 0.0
-            AppWindow.POSE_PARAMS['MHR']['model_parameters'][0, 5] = 0.0
         self._rot_x.double_value = 0.0
         self._rot_y.double_value = 0.0
         self._rot_z.double_value = 0.0
@@ -1929,7 +1927,6 @@ class AppWindow:
             self._body_model.selected_text,
             gender=self._body_model_gender.selected_text,
         )
-    # NEW END
 
     def _on_transparency(self, val):
         if self._scene.scene.has_geometry("__body_model__"):
