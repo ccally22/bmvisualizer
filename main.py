@@ -908,20 +908,20 @@ class AppWindow:
         self.model_settings.add_child(h)
 
         # new global rotation UI
-        h = gui.Horiz(0.25 * em)
-        h.add_child(gui.Label("Global Rotation"))
-        self.model_settings.add_child(h)
-        grid = gui.VGrid(2, 0.25 * em)
-        grid.add_child(gui.Label("Rotate X"))
-        grid.add_child(self._rot_x)
-        grid.add_child(gui.Label("Rotate Y"))
-        grid.add_child(self._rot_y)
-        grid.add_child(gui.Label("Rotate Z"))
-        grid.add_child(self._rot_z)
-        self.model_settings.add_child(grid)
-        h = gui.Horiz(0.25 * em)
-        h.add_child(self._rot_reset)
-        self.model_settings.add_child(h)
+        self._global_rotation_header_row = gui.Horiz(0.25 * em)
+        self._global_rotation_header_row.add_child(gui.Label("Global Rotation"))
+        self.model_settings.add_child(self._global_rotation_header_row)
+        self._global_rotation_grid = gui.VGrid(2, 0.25 * em)
+        self._global_rotation_grid.add_child(gui.Label("Rotate X"))
+        self._global_rotation_grid.add_child(self._rot_x)
+        self._global_rotation_grid.add_child(gui.Label("Rotate Y"))
+        self._global_rotation_grid.add_child(self._rot_y)
+        self._global_rotation_grid.add_child(gui.Label("Rotate Z"))
+        self._global_rotation_grid.add_child(self._rot_z)
+        self.model_settings.add_child(self._global_rotation_grid)
+        self._global_rotation_reset_row = gui.Horiz(0.25 * em)
+        self._global_rotation_reset_row.add_child(self._rot_reset)
+        self.model_settings.add_child(self._global_rotation_reset_row)
 
         self._expression_grid = gui.VGrid(2, 0.25 * em)
         self._expression_grid.add_child(gui.Label("Exp Component"))
@@ -1363,6 +1363,20 @@ class AppWindow:
         self._body_pose_joint_y.visible = not is_mhr
         self._body_pose_joint_z.visible = not is_mhr
         self._body_pose_joint_val.visible = is_mhr
+        if hasattr(self, "_global_rotation_header_row"):
+            self._global_rotation_header_row.visible = is_mhr
+        if hasattr(self, "_global_rotation_grid"):
+            self._global_rotation_grid.visible = is_mhr
+        if hasattr(self, "_global_rotation_reset_row"):
+            self._global_rotation_reset_row.visible = is_mhr
+        if hasattr(self, "_rot_x"):
+            self._rot_x.visible = is_mhr
+        if hasattr(self, "_rot_y"):
+            self._rot_y.visible = is_mhr
+        if hasattr(self, "_rot_z"):
+            self._rot_z.visible = is_mhr
+        if hasattr(self, "_rot_reset"):
+            self._rot_reset.visible = is_mhr
         # Labels für rot_x/y/z auch verstecken bei MHR
         if hasattr(self, "_rot_x_label"):
             self._rot_x_label.visible = not is_mhr
