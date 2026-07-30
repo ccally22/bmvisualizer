@@ -1575,6 +1575,9 @@ class AppWindow:
     def _on_body_model(self, name, index):
         logger.info(f"Loading body model {name}-{index}")
         self._body_beta_val.double_value = 0.0
+        # Expression zurücksetzen bei Modell-Wechsel
+        self._body_exp_tensor = torch.zeros(1, 10)
+        self._body_exp_val.double_value = 0.0
         AppWindow.CAM_FIRST = True
         #self.load_body_model(name)
         self._set_model_specific_ui_visibility(name)
