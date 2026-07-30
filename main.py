@@ -2345,7 +2345,7 @@ class AppWindow:
 
             model_output = model(
                 betas=self._body_beta_tensor,
-                expression=self._body_exp_tensor,
+                **extra_args,
                 **input_params,
             )
             verts = model_output.vertices[0].detach().numpy()
