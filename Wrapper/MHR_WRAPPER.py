@@ -34,6 +34,13 @@ class MHR_WRAPPER(BodyModelWrapper):
         if shape_params is not None:
             n = min(shape_params.shape[1], NUM_IDENTITY_BLENDSHAPES)
             self._identity_coeffs[0, :n] = shape_params[0, :n]
+
+        # Face Expression falls übergeben
+        if 'expression' in input_params:
+            exp = input_params['expression']
+            n = min(exp.shape[1], NUM_FACE_EXPRESSION_BLENDSHAPES)
+            self._face_expr_coeffs[0, :n] = exp[0, :n]
+            
         # Model parameters kopieren
         model_parameters = input_params['model_parameters'].clone()
 

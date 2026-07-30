@@ -930,6 +930,11 @@ class AppWindow:
         self._expression_grid.add_child(self._body_exp_val)
         self.model_settings.add_child(self._expression_grid)
 
+        # Reset expression Button
+        self._expression_reset_row = gui.Horiz(0.25 * em)
+        self._expression_reset_row.add_child(self._body_exp_reset)
+        self.model_settings.add_child(self._expression_reset_row)
+
         # show joints button
         h = gui.Horiz(0.25 * em)  # row 2
         h.add_child(self._show_joints)
@@ -1387,10 +1392,12 @@ class AppWindow:
         # ... (dein bestehender Code fuer ANNY etc. bleibt unveraendert)
         self.window.set_needs_layout()
         is_anny = body_model_name == "ANNY"
+        # Nur SMPLX, FLAME und MHR haben Facial Expression
+        has_expression = body_model_name in ("SMPLX", "FLAME", "MHR")
         if hasattr(self, "_expression_grid"):
-            self._expression_grid.visible = not is_anny
+            self._expression_grid.visible = has_expression
         if hasattr(self, "_expression_reset_row"):
-            self._expression_reset_row.visible = not is_anny
+            self._expression_reset_row.visible = has_expression
         if hasattr(self, "_body_pose_joint_label"):
             self._body_pose_joint_label.visible = not is_anny
             self._body_pose_joint.visible = not is_anny
@@ -1582,6 +1589,9 @@ class AppWindow:
     def _on_body_model(self, name, index):
         logger.info(f"Loading body model {name}-{index}")
         self._body_beta_val.double_value = 0.0
+        # Expression zurücksetzen bei Modell-Wechsel
+        self._body_exp_tensor = torch.zeros(1, 10)
+        self._body_exp_val.double_value = 0.0
         AppWindow.CAM_FIRST = True
         #self.load_body_model(name)
         self._set_model_specific_ui_visibility(name)
@@ -2342,10 +2352,14 @@ class AppWindow:
             for k, v in input_params.items():
                 input_params[k] = v.reshape(1, -1)
 
+            # Expression nur für Modelle die es unterstützen
+            extra_args = {}
+            if body_model in ('SMPLX', 'FLAME'):
+                extra_args['expression'] = self._body_exp_tensor
 
             model_output = model(
                 betas=self._body_beta_tensor,
-                #expression=self._body_exp_tensor,
+                **extra_args,
                 **input_params,
             )
             verts = model_output.vertices[0].detach().numpy()
@@ -2364,6 +2378,9 @@ class AppWindow:
             if body_model == 'ANNY':
                 mesh_data = wrapper.forward(input_params, self._anny_phenotype_values)
             else:
+                # Expression an MHR mitgeben
+                if body_model == 'MHR':
+                    input_params['expression'] = self._body_exp_tensor
                 mesh_data = wrapper.forward(input_params, self._body_beta_tensor)
             
             verts = mesh_data[0]
