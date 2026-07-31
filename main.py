@@ -1905,7 +1905,10 @@ class AppWindow:
             if bm == 'MHR':
                 AppWindow.POSE_PARAMS['MHR']['model_parameters'][0, 4] = val
         elif "pose" in AppWindow.POSE_PARAMS[bm]:
-            AppWindow.POSE_PARAMS[bm]["pose"][0, 0, 1] = val
+            if bm == 'ANNY':
+                AppWindow.POSE_PARAMS[bm]["pose"][0, 0, 2] = val
+            else:
+                AppWindow.POSE_PARAMS[bm]["pose"][0, 0, 1] = val
         else:
             return
         self.load_body_model(
@@ -1920,7 +1923,10 @@ class AppWindow:
             if bm == 'MHR':
                 AppWindow.POSE_PARAMS['MHR']['model_parameters'][0, 5] = val
         elif "pose" in AppWindow.POSE_PARAMS[bm]:
-            AppWindow.POSE_PARAMS[bm]["pose"][0, 0, 2] = val
+            if bm == 'ANNY':
+                AppWindow.POSE_PARAMS[bm]["pose"][0, 0, 1] = -val
+            else:
+                AppWindow.POSE_PARAMS[bm]["pose"][0, 0, 2] = val
         else:
             return
         self.load_body_model(
