@@ -1363,20 +1363,13 @@ class AppWindow:
         self._body_pose_joint_y.visible = not is_mhr
         self._body_pose_joint_z.visible = not is_mhr
         self._body_pose_joint_val.visible = is_mhr
+       # Global Rotation Slider immer sichtbar (für alle Modelle)
         if hasattr(self, "_global_rotation_header_row"):
-            self._global_rotation_header_row.visible = is_mhr
+            self._global_rotation_header_row.visible = True
         if hasattr(self, "_global_rotation_grid"):
-            self._global_rotation_grid.visible = is_mhr
+            self._global_rotation_grid.visible = True
         if hasattr(self, "_global_rotation_reset_row"):
-            self._global_rotation_reset_row.visible = is_mhr
-        if hasattr(self, "_rot_x"):
-            self._rot_x.visible = is_mhr
-        if hasattr(self, "_rot_y"):
-            self._rot_y.visible = is_mhr
-        if hasattr(self, "_rot_z"):
-            self._rot_z.visible = is_mhr
-        if hasattr(self, "_rot_reset"):
-            self._rot_reset.visible = is_mhr
+            self._global_rotation_reset_row.visible = True
         # Labels für rot_x/y/z auch verstecken bei MHR
         if hasattr(self, "_rot_x_label"):
             self._rot_x_label.visible = not is_mhr
