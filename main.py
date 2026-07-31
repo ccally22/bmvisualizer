@@ -1368,20 +1368,13 @@ class AppWindow:
         self._body_pose_joint_y.visible = not is_mhr
         self._body_pose_joint_z.visible = not is_mhr
         self._body_pose_joint_val.visible = is_mhr
+       # Global Rotation Slider immer sichtbar (für alle Modelle)
         if hasattr(self, "_global_rotation_header_row"):
-            self._global_rotation_header_row.visible = is_mhr
+            self._global_rotation_header_row.visible = True
         if hasattr(self, "_global_rotation_grid"):
-            self._global_rotation_grid.visible = is_mhr
+            self._global_rotation_grid.visible = True
         if hasattr(self, "_global_rotation_reset_row"):
-            self._global_rotation_reset_row.visible = is_mhr
-        if hasattr(self, "_rot_x"):
-            self._rot_x.visible = is_mhr
-        if hasattr(self, "_rot_y"):
-            self._rot_y.visible = is_mhr
-        if hasattr(self, "_rot_z"):
-            self._rot_z.visible = is_mhr
-        if hasattr(self, "_rot_reset"):
-            self._rot_reset.visible = is_mhr
+            self._global_rotation_reset_row.visible = True
         # Labels für rot_x/y/z auch verstecken bei MHR
         if hasattr(self, "_rot_x_label"):
             self._rot_x_label.visible = not is_mhr
@@ -1479,6 +1472,9 @@ class AppWindow:
     def _build_anny_bone_hierarchy(self):
         hierarchy = {region: {} for region in AppWindow.ANNY_REGION_ORDER}
         for bone_index, bone_name in enumerate(AppWindow.JOINT_NAMES["ANNY"]["pose"]):
+            # Root (Index 0) ausblenden - wird über Global Rotation gesteuert
+            if bone_index == 0:
+                continue
             region, group = self._classify_anny_bone(bone_name)
             hierarchy.setdefault(region, {})
             hierarchy[region].setdefault(group, [])
@@ -1624,11 +1620,8 @@ class AppWindow:
 
         self._body_pose_comp.clear_items()
         for k in AppWindow.POSE_PARAMS[name].keys():
-            # trans wird über die globalen Translation-Slider gesteuert.
-            if k == 'trans':
-                continue
-            # Bei MHR: global_orient zusätzlich nicht im Dropdown (hat eigene Slider)
-            if name == 'MHR' and k == 'global_orient':
+            # trans und global_orient werden über die globalen Slider gesteuert
+            if k in ('trans', 'global_orient'):
                 continue
             self._body_pose_comp.add_item(k)
 
@@ -1645,6 +1638,9 @@ class AppWindow:
                 lo, hi = wrapper._pose_param_limits[i]
                 if lo == hi:
                     continue
+            # Bei SUPR/STAR/ANNY: Root (Index 0) ausblenden (hat eigene Global Rotation Slider)
+            if name in ('SUPR', 'STAR', 'ANNY') and i == 0:
+                continue
             self._body_pose_joint.add_item(f'{i}-{joint_names[i]}')
         if name == "ANNY" and self._body_pose_joint.number_of_items > 0:
             self._sync_anny_hierarchy_to_bone(0)
@@ -1775,8 +1771,22 @@ class AppWindow:
                 AppWindow.POSE_PARAMS["MHR"]["model_parameters"][0, ji]
             )
         self._body_pose_joint.clear_items()
-        joint_names = AppWindow.JOINT_NAMES[self._body_model.selected_text][name]
-        for i in range(AppWindow.POSE_PARAMS[self._body_model.selected_text][name].shape[1]):
+        bm = self._body_model.selected_text
+        joint_names = AppWindow.JOINT_NAMES[bm][name]
+        for i in range(AppWindow.POSE_PARAMS[bm][name].shape[1]):
+            # Bei MHR: erste 6 (Root Trans + Rot) ausblenden (haben eigene Slider)
+            if bm == 'MHR' and i < 6:
+                continue
+            # Bei MHR: Parameter mit min==max ausblenden (nicht bewegbar)
+            if bm == 'MHR':
+                gender = self._body_model_gender.selected_text
+                wrapper = AppWindow.PRELOADED_BODY_MODELS[f'mhr-{gender.lower()}']
+                lo, hi = wrapper._pose_param_limits[i]
+                if lo == hi:
+                    continue
+            # Bei SUPR/STAR/ANNY: Root (Index 0) ausblenden
+            if bm in ('SUPR', 'STAR', 'ANNY') and i == 0:
+                continue
             self._body_pose_joint.add_item(f'{i}-{joint_names[i]}')
         self._reset_rot_sliders()
 
@@ -1905,7 +1915,10 @@ class AppWindow:
             if bm == 'MHR':
                 AppWindow.POSE_PARAMS['MHR']['model_parameters'][0, 4] = val
         elif "pose" in AppWindow.POSE_PARAMS[bm]:
-            AppWindow.POSE_PARAMS[bm]["pose"][0, 0, 1] = val
+            if bm == 'ANNY':
+                AppWindow.POSE_PARAMS[bm]["pose"][0, 0, 2] = val
+            else:
+                AppWindow.POSE_PARAMS[bm]["pose"][0, 0, 1] = val
         else:
             return
         self.load_body_model(
@@ -1920,7 +1933,10 @@ class AppWindow:
             if bm == 'MHR':
                 AppWindow.POSE_PARAMS['MHR']['model_parameters'][0, 5] = val
         elif "pose" in AppWindow.POSE_PARAMS[bm]:
-            AppWindow.POSE_PARAMS[bm]["pose"][0, 0, 2] = val
+            if bm == 'ANNY':
+                AppWindow.POSE_PARAMS[bm]["pose"][0, 0, 1] = -val
+            else:
+                AppWindow.POSE_PARAMS[bm]["pose"][0, 0, 2] = val
         else:
             return
         self.load_body_model(
