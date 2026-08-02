@@ -1231,10 +1231,10 @@ class AppWindow:
             mat_body = rendering.MaterialRecord()
             if show:
                 mat_body.shader = "defaultLitTransparency"
-                mat_body.base_color = [0.5, 0.5, 0.5, 0.8]
+                mat_body.base_color = [0.9, 0.9, 0.9, 0.8]
             else:
                 mat_body.shader = "defaultLit"
-                mat_body.base_color = [0.5, 0.5, 0.5, 1.0]
+                mat_body.base_color = [0.9, 0.9, 0.9, 1.0]
             self._scene.scene.modify_geometry_material("__body_model__", mat_body)
 
         joints = AppWindow.JOINTS
