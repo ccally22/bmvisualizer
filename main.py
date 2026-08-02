@@ -1972,14 +1972,14 @@ class AppWindow:
         if self._scene.scene.has_geometry("__body_model__"):
             mat_body = rendering.MaterialRecord()
             mat_body.shader = "defaultLitTransparency"
-            mat_body.base_color = [0.5, 0.5, 0.5, 1 - val]
+            mat_body.base_color = [0.9, 0.9, 0.9, 1 - val]
             self._scene.scene.modify_geometry_material("__body_model__", mat_body)
 
     def _on_transparency_reset(self):
         if self._scene.scene.has_geometry("__body_model__"):
             mat_body = rendering.MaterialRecord()
             mat_body.shader = "defaultLit"
-            mat_body.base_color = [0.5, 0.5, 0.5, 1.0]
+            mat_body.base_color = [0.9, 0.9, 0.9, 1.0]
             self._scene.scene.modify_geometry_material("__body_model__", mat_body)
         self._transparency.double_value = 0.0
 
