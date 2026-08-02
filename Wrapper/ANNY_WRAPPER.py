@@ -18,7 +18,7 @@ class ANNY_WRAPPER(BodyModelWrapper):
         self._model = create_model()
         return self
 
-    def forward(self, input_params, shape_params=None):
+    def forward(self, input_params, shape_params=None, expression=None):
         # shape_params bei ANNY: dict mit phenotypes
         phenotypes = shape_params if shape_params else {}
         # ohne den ersten 1 teil (der immer gleich ist):

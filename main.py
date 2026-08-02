@@ -2310,6 +2310,16 @@ class AppWindow:
             g.compute_vertex_normals()
             self._scene.scene.add_geometry(f"__ground_{idx:04d}__", g, self.settings._materials[Settings.LIT])
 
+    # ANNY nutzt Phenotypes (Dict), andere Modelle Betas (Tensor)
+    # damit wrapper gut funktioniert hilfsmethode
+    def get_shape_params(self):
+        bm = self._body_model.selected_text
+        if bm == "ANNY":
+            return self._anny_phenotype_values
+        else:
+            return self._body_beta_tensor
+
+
     def preload_body_models(self):
         from smplx import SMPL, SMPLX, MANO, FLAME
         from Wrapper import wrapper_dict
@@ -2379,7 +2389,6 @@ class AppWindow:
 
             faces = model.faces
 
-        # wrapper-Implementierung fuer alle neuen Modelle + STAR und ANNY
        # wrapper-Implementierung fuer alle neuen Modelle + STAR und ANNY
         else:
             # parameter von der gui
@@ -2387,13 +2396,7 @@ class AppWindow:
             wrapper = AppWindow.PRELOADED_BODY_MODELS[f'{body_model.lower()}-{gender.lower()}']
 
             # ANNY nutzt Phenotypes (Dict), andere Modelle Betas (Tensor)
-            if body_model == 'ANNY':
-                mesh_data = wrapper.forward(input_params, self._anny_phenotype_values)
-            else:
-                # Expression an MHR mitgeben
-                if body_model == 'MHR':
-                    input_params['expression'] = self._body_exp_tensor
-                mesh_data = wrapper.forward(input_params, self._body_beta_tensor)
+            mesh_data = wrapper.forward(input_params, self.get_shape_params(), expression=self._body_exp_tensor )
             
             verts = mesh_data[0]
             AppWindow.JOINTS = mesh_data[1]

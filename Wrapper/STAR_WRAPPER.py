@@ -6,7 +6,7 @@ class STAR_WRAPPER(BodyModelWrapper):
         self._model = STAR(gender=gender.lower())
         return self
 
-    def forward(self, input_params, shape_params):
+    def forward(self, input_params, shape_params, expression=None):
         # berechnung der neuen werte
         for k, v in input_params.items():
             input_params[k] = v.reshape(1, -1)
