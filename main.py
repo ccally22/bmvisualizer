@@ -972,33 +972,38 @@ class AppWindow:
         # grid.add_child(self._body_beta_reset)
         grid = gui.VGrid(2, 0.25 * em)
         self._body_pose_comp_label = gui.Label("Pose comp:")
-        self._body_pose_joint_label = gui.Label("Joint id:")
-        self._anny_region_label = gui.Label("Anny Region")
-        self._anny_group_label = gui.Label("Anny Group")
-        self._anny_bone_label = gui.Label("Anny Bone")
-
         grid.add_child(self._body_pose_comp_label)
         grid.add_child(self._body_pose_comp)
+        self._body_pose_joint_label = gui.Label("Joint id:")
         grid.add_child(self._body_pose_joint_label)
         grid.add_child(self._body_pose_joint)
-        grid.add_child(self._anny_region_label)
-        grid.add_child(self._anny_region)
-        grid.add_child(self._anny_group_label)
-        grid.add_child(self._anny_group)
-        grid.add_child(self._anny_bone_label)
-        grid.add_child(self._anny_bone)
-        self._rot_x_label = gui.Label("rot_x")
-        grid.add_child(self._rot_x_label)
-        grid.add_child(self._body_pose_joint_x)
-        self._rot_y_label = gui.Label("rot_y")
-        grid.add_child(self._rot_y_label)
-        grid.add_child(self._body_pose_joint_y)
-        self._rot_z_label = gui.Label("rot_z")
-        grid.add_child(self._rot_z_label)
-        grid.add_child(self._body_pose_joint_z)
-        grid.add_child(gui.Label("value"))
-        grid.add_child(self._body_pose_joint_val)
         self.model_settings.add_child(grid)
+
+        self._anny_grid = gui.VGrid(2, 0.25 * em)
+        self._anny_region_label = gui.Label("Anny Region")
+        self._anny_grid.add_child(self._anny_region_label)
+        self._anny_grid.add_child(self._anny_region)
+        self._anny_group_label = gui.Label("Anny Group")
+        self._anny_grid.add_child(self._anny_group_label)
+        self._anny_grid.add_child(self._anny_group)
+        self._anny_bone_label = gui.Label("Anny Bone")
+        self._anny_grid.add_child(self._anny_bone_label)
+        self._anny_grid.add_child(self._anny_bone)
+        self.model_settings.add_child(self._anny_grid)
+
+        self._rot_grid = gui.VGrid(2, 0.25 * em)
+        self._rot_x_label = gui.Label("rot_x")
+        self._rot_grid.add_child(self._rot_x_label)
+        self._rot_grid.add_child(self._body_pose_joint_x)
+        self._rot_y_label = gui.Label("rot_y")
+        self._rot_grid.add_child(self._rot_y_label)
+        self._rot_grid.add_child(self._body_pose_joint_y)
+        self._rot_z_label = gui.Label("rot_z")
+        self._rot_grid.add_child(self._rot_z_label)
+        self._rot_grid.add_child(self._body_pose_joint_z)
+        self._rot_grid.add_child(gui.Label("value"))
+        self._rot_grid.add_child(self._body_pose_joint_val)
+        self.model_settings.add_child(self._rot_grid)
 
         h = gui.Horiz(0.25 * em)  # row 2
         h.add_child(self._body_pose_reset)
@@ -1394,16 +1399,8 @@ class AppWindow:
         if hasattr(self, "_body_pose_joint_label"):
             self._body_pose_joint_label.visible = not is_anny
             self._body_pose_joint.visible = not is_anny
-        for attr in (
-            "_anny_region_label",
-            "_anny_region",
-            "_anny_group_label",
-            "_anny_group",
-            "_anny_bone_label",
-            "_anny_bone",
-        ):
-            if hasattr(self, attr):
-                getattr(self, attr).visible = is_anny
+        if hasattr(self, "_anny_grid"):
+            self._anny_grid.visible = is_anny
         self.window.set_needs_layout()
 
     def _classify_anny_bone(self, bone_name):
