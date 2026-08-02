@@ -2037,10 +2037,9 @@ class AppWindow:
             self._show_joints.checked:
 
             bm = self._body_model.selected_text
-            # wieso stürzt immer noch ab?
             if not (bm in ['SMPL', 'SMPLX']):
                 self._update_label(f'joint dragging not implemented')
-                return
+                return gui.Widget.EventCallbackResult.HANDLED
 
             AppWindow.DRAG_START_TIME = time.time()
             AppWindow.IS_DRAGGING = True
@@ -2059,7 +2058,7 @@ class AppWindow:
                 if depth == 1.0:  # clicked on nothing (i.e. the far plane)
                     AppWindow.IS_DRAGGING = False
                     AppWindow.DRAG_DEPTH = None
-                    return
+                    return gui.Widget.EventCallbackResult.HANDLED
 
                 AppWindow.DRAG_DEPTH = depth
                 world = self._scene.scene.camera.unproject(
