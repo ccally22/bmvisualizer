@@ -1,0 +1,36 @@
+name: trial_env2
+channels:
+  - conda-forge
+dependencies:
+  - python=3.12
+  - pip
+  - numpy
+  - scipy
+  - pytorch
+  - pymomentum
+  - chumpy
+  - trimesh
+  - ezc3d
+  - pybind11
+
+  - pip:
+      - addict
+      - configargparse
+      - dash
+      - ipdb
+      - ipython
+      - joblib
+      - loguru
+      - matplotlib
+      - open3d
+      - pandas
+      - plotly
+      - pydantic
+      - pyquaternion
+      - pyyaml
+      - requests
+      - roma
+      - scikit-learn
+      - smplx
+      - toml
+      - tqdm
