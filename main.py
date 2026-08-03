@@ -1013,7 +1013,7 @@ class AppWindow:
         h = gui.Horiz(0.25 * em)
         self.model_settings.add_child(h)
         grid = gui.VGrid(2, 0.25 * em)
-        grid.add_child(gui.Label("Transparancy"))
+        grid.add_child(gui.Label("Transparency"))
         grid.add_child(self._transparency)
         self.model_settings.add_child(grid)
         self.model_settings.add_fixed(0.5 * em)
@@ -2430,6 +2430,7 @@ class AppWindow:
                     model = wrapper.preload_body_model(gender)
                     if body_model == "MHR":
                         AppWindow.JOINT_NAMES["MHR"]["model_parameters"] = wrapper._pose_param_names
+                        AppWindow.KEYPOINT_NAMES['MHR'] = wrapper._joint_names
 
                 key = f'{body_model.lower()}-{gender.lower()}'
                 AppWindow.PRELOADED_BODY_MODELS[key] = model
