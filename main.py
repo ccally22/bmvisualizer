@@ -851,6 +851,8 @@ class AppWindow:
                 continue
             self._body_pose_comp.add_item(k)
 
+        self._body_pose_comp_grid = gui.VGrid(2, 0.25 * em)
+        self._body_pose_comp_label = gui.Label("Pose comp:")
         self._body_pose_joint = gui.Combobox()
 
         self._body_pose_joint_x = gui.Slider(gui.Slider.INT)
@@ -1054,6 +1056,8 @@ class AppWindow:
         self._expression_reset_row.add_child(self._body_exp_reset)
         self.model_settings.add_child(self._expression_reset_row)
 
+        self.model_settings.add_fixed(0.5 * em)
+
         # show joints button
         h = gui.Horiz(0.25 * em)  # row 2
         h.add_child(self._show_joints)
@@ -1070,7 +1074,9 @@ class AppWindow:
         grid.add_child(gui.Label("Transparency"))
         grid.add_child(self._transparency)
         self.model_settings.add_child(grid)
+
         self.model_settings.add_fixed(0.5 * em)
+
         h = gui.Horiz(0.25 * em)
         h.add_child(self._transparency_reset)
         self.model_settings.add_child(h)
@@ -1085,18 +1091,15 @@ class AppWindow:
         # abstand hinzufuegen
         self.model_settings.add_fixed(em)
 
-        # grid.add_child(gui.Label("Beta"))
-        # grid.add_child(self._body_beta_text)
-        # grid.add_child(gui.Label("reset"))
-        # grid.add_child(self._body_beta_reset)
-        grid = gui.VGrid(2, 0.25 * em)
-        self._body_pose_comp_label = gui.Label("Pose comp:")
-        grid.add_child(self._body_pose_comp_label)
-        grid.add_child(self._body_pose_comp)
+        self._body_pose_comp_grid.add_child(self._body_pose_comp_label)
+        self._body_pose_comp_grid.add_child(self._body_pose_comp)
+        self.model_settings.add_child(self._body_pose_comp_grid)
+
+        self._joint_grid = gui.VGrid(2, 0.25 * em)
         self._body_pose_joint_label = gui.Label("Joint id:")
-        grid.add_child(self._body_pose_joint_label)
-        grid.add_child(self._body_pose_joint)
-        self.model_settings.add_child(grid)
+        self._joint_grid.add_child(self._body_pose_joint_label)
+        self._joint_grid.add_child(self._body_pose_joint)
+        self.model_settings.add_child(self._joint_grid)
 
         self._anny_grid = gui.VGrid(2, 0.25 * em)
         self._anny_region_label = gui.Label("Anny Region")
@@ -1110,6 +1113,8 @@ class AppWindow:
         self._anny_grid.add_child(self._anny_bone)
         self.model_settings.add_child(self._anny_grid)
 
+        self.model_settings.add_fixed(0.5 * em)
+
         self._rot_grid = gui.VGrid(2, 0.25 * em)
         self._rot_x_label = gui.Label("rot_x")
         self._rot_grid.add_child(self._rot_x_label)
@@ -1120,9 +1125,14 @@ class AppWindow:
         self._rot_z_label = gui.Label("rot_z")
         self._rot_grid.add_child(self._rot_z_label)
         self._rot_grid.add_child(self._body_pose_joint_z)
-        self._rot_grid.add_child(gui.Label("value"))
-        self._rot_grid.add_child(self._body_pose_joint_val)
         self.model_settings.add_child(self._rot_grid)
+
+        self._mhr_grid = gui.VGrid(2, 0.25 * em)
+        self._mhr_grid.add_child(gui.Label("value"))
+        self._mhr_grid.add_child(self._body_pose_joint_val)
+        self.model_settings.add_child(self._mhr_grid)
+
+        self.model_settings.add_fixed(0.5 * em)
 
         h = gui.Horiz(0.25 * em)  # row 2
         h.add_child(self._body_pose_reset)
@@ -1517,6 +1527,7 @@ class AppWindow:
 
     def _set_model_specific_ui_visibility(self, body_model_name):
         is_mhr = body_model_name == "MHR"
+        is_flame = body_model_name == "FLAME"
         self._body_pose_joint_x.visible = not is_mhr
         self._body_pose_joint_y.visible = not is_mhr
         self._body_pose_joint_z.visible = not is_mhr
@@ -1529,13 +1540,10 @@ class AppWindow:
         if hasattr(self, "_global_rotation_reset_row"):
             self._global_rotation_reset_row.visible = True
         # Labels für rot_x/y/z auch verstecken bei MHR
-        if hasattr(self, "_rot_x_label"):
-            self._rot_x_label.visible = not is_mhr
-        if hasattr(self, "_rot_y_label"):
-            self._rot_y_label.visible = not is_mhr
-        if hasattr(self, "_rot_z_label"):
-            self._rot_z_label.visible = not is_mhr
-        # ... (dein bestehender Code fuer ANNY etc. bleibt unveraendert)
+        if hasattr(self, "_rot_grid"):
+            self._rot_grid.visible = not is_mhr
+        if hasattr(self, '_mhr_grid'):
+            self._mhr_grid.visible = is_mhr
         self.window.set_needs_layout()
         is_anny = body_model_name == "ANNY"
         # Nur SMPLX, FLAME und MHR haben Facial Expression
@@ -1545,10 +1553,13 @@ class AppWindow:
         if hasattr(self, "_expression_reset_row"):
             self._expression_reset_row.visible = has_expression
         if hasattr(self, "_body_pose_joint_label"):
-            self._body_pose_joint_label.visible = not is_anny
-            self._body_pose_joint.visible = not is_anny
+            self._joint_grid.visible = not is_anny
+            #self._body_pose_joint_label.visible = not is_anny
+            #self._body_pose_joint.visible = not is_anny
         if hasattr(self, "_anny_grid"):
             self._anny_grid.visible = is_anny
+        if hasattr(self, '_joint_grid'):
+            self._joint_grid.visible = not is_flame
         self.window.set_needs_layout()
 
     def _classify_anny_bone(self, bone_name):
@@ -1794,6 +1805,15 @@ class AppWindow:
         AppWindow.SELECTED_JOINT = None
         self._on_show_joints(self._show_joints.checked)
 
+        # pose comp nur fuer SMPLX und FLAME anzeigen
+        need_comp = name in ('SMPLX', 'FLAME')
+        self._body_pose_comp_grid.visible = need_comp
+
+        if name == 'SMPLX':
+            self._body_pose_comp_label.text = 'SMPLX region:'
+        elif name == 'FLAME':
+            self._body_pose_comp_label.text = 'FLAME region:'
+
     def _on_body_model_gender(self, name, index):
         logger.info(f"Changing {self._body_model.selected_text} body model gender to {name}-{index}")
         self._body_beta_val.double_value = 0.0
@@ -1980,8 +2000,9 @@ class AppWindow:
 
     def _on_body_pose_reset(self):
         bm = self._body_model.selected_text
-        bp = self._body_pose_comp.selected_text
-        AppWindow.POSE_PARAMS[bm][bp] = torch.zeros_like(AppWindow.POSE_PARAMS[bm][bp])
+        #bp = self._body_pose_comp.selected_text
+        for key in AppWindow.POSE_PARAMS[bm]:
+            AppWindow.POSE_PARAMS[bm][key] = torch.zeros_like(AppWindow.POSE_PARAMS[bm][key])
         self._reset_rot_sliders()
         self.load_body_model(
             self._body_model.selected_text,
