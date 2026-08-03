@@ -326,6 +326,71 @@ class AppWindow:
         "Tongue",
         "Other",
     ]
+
+    # ANNY uses its own Blender-style bone names. Keep every known ANNY bone
+    # in exactly one explicit display-size category, rather than deriving a
+    # category from a substring in its name.
+    ANNY_HAND_JOINT_NAMES = [
+        'wrist.L',
+        'finger1-1.L', 'finger1-2.L', 'finger1-3.L', 'metacarpal1.L',
+        'finger2-1.L', 'finger2-2.L', 'finger2-3.L', 'metacarpal2.L',
+        'finger3-1.L', 'finger3-2.L', 'finger3-3.L', 'metacarpal3.L',
+        'finger4-1.L', 'finger4-2.L', 'finger4-3.L', 'metacarpal4.L',
+        'finger5-1.L', 'finger5-2.L', 'finger5-3.L',
+        'wrist.R',
+        'finger1-1.R', 'finger1-2.R', 'finger1-3.R', 'metacarpal1.R',
+        'finger2-1.R', 'finger2-2.R', 'finger2-3.R', 'metacarpal2.R',
+        'finger3-1.R', 'finger3-2.R', 'finger3-3.R', 'metacarpal3.R',
+        'finger4-1.R', 'finger4-2.R', 'finger4-3.R', 'metacarpal4.R',
+        'finger5-1.R', 'finger5-2.R', 'finger5-3.R',
+    ]
+    ANNY_FOOT_JOINT_NAMES = [
+        'foot.L',
+        'toe1-1.L', 'toe1-2.L',
+        'toe2-1.L', 'toe2-2.L', 'toe2-3.L',
+        'toe3-1.L', 'toe3-2.L', 'toe3-3.L',
+        'toe4-1.L', 'toe4-2.L', 'toe4-3.L',
+        'toe5-1.L', 'toe5-2.L', 'toe5-3.L',
+        'foot.R',
+        'toe1-1.R', 'toe1-2.R',
+        'toe2-1.R', 'toe2-2.R', 'toe2-3.R',
+        'toe3-1.R', 'toe3-2.R', 'toe3-3.R',
+        'toe4-1.R', 'toe4-2.R', 'toe4-3.R',
+        'toe5-1.R', 'toe5-2.R', 'toe5-3.R',
+    ]
+    ANNY_HEAD_JOINT_NAMES = [
+        'neck01', 'neck02', 'neck03', 'head', 'jaw',
+        'special04', 'oris02', 'oris01', 'oris06.L', 'oris07.L',
+        'oris06.R', 'oris07.R',
+        'tongue00', 'tongue01', 'tongue02', 'tongue03', 'tongue04',
+        'tongue07.L', 'tongue07.R', 'tongue06.L', 'tongue06.R',
+        'tongue05.L', 'tongue05.R',
+        'levator02.L', 'levator03.L', 'levator04.L', 'levator05.L',
+        'levator02.R', 'levator03.R', 'levator04.R', 'levator05.R',
+        'special01', 'oris04.L', 'oris03.L', 'oris04.R', 'oris03.R',
+        'oris06', 'oris05', 'special03', 'levator06.L', 'levator06.R',
+        'special06.L', 'special05.L', 'eye.L',
+        'orbicularis03.L', 'orbicularis04.L',
+        'special06.R', 'special05.R', 'eye.R',
+        'orbicularis03.R', 'orbicularis04.R',
+        'temporalis01.L', 'oculi02.L', 'oculi01.L',
+        'temporalis01.R', 'oculi02.R', 'oculi01.R',
+        'temporalis02.L', 'risorius02.L', 'risorius03.L',
+        'temporalis02.R', 'risorius02.R', 'risorius03.R',
+    ]
+    ANNY_BODY_JOINT_NAMES = [
+        'root',
+        'pelvis.L', 'upperleg01.L', 'upperleg02.L',
+        'lowerleg01.L', 'lowerleg02.L',
+        'pelvis.R', 'upperleg01.R', 'upperleg02.R',
+        'lowerleg01.R', 'lowerleg02.R',
+        'spine05', 'spine04', 'spine03', 'spine02', 'breast.L', 'breast.R',
+        'spine01',
+        'clavicle.L', 'shoulder01.L', 'upperarm01.L', 'upperarm02.L',
+        'lowerarm01.L', 'lowerarm02.L',
+        'clavicle.R', 'shoulder01.R', 'upperarm01.R', 'upperarm02.R',
+        'lowerarm01.R', 'lowerarm02.R',
+    ]
     CAM_FIRST = True
     # speichern fuer den camera reset button
     CAM_BOUNDS = None
@@ -1253,10 +1318,10 @@ class AppWindow:
         green = [0.3, 0.7, 0.3, 1.0]
         red = [0.7, 0.3, 0.3, 1.0]
         if bm == "ANNY":
-            hand_radius = 0.005
-            foot_radius = 0.005
+            hand_radius = 0.01
+            foot_radius = 0.01
             head_radius = 0.004
-            body_radius = 0.05
+            body_radius = 0.025
         else:
             hand_radius = 0.01
             foot_radius = 0.01
@@ -1280,13 +1345,28 @@ class AppWindow:
             # logger.info('drawing joints')
             for i in range(num_joints):
                 joint_name = joint_names[i] if i < len(joint_names) else f"joint_{i}"
-                radius = body_radius
-                if joint_name in LEFT_HAND_KEYPOINT_NAMES + RIGHT_HAND_KEYPOINT_NAMES:
-                    radius = hand_radius
-                elif joint_name in HEAD_KEYPOINT_NAMES:
-                    radius = head_radius
-                elif joint_name in FOOT_KEYPOINT_NAMES:
-                    radius = foot_radius
+                if bm == "ANNY":
+                    if joint_name in AppWindow.ANNY_HAND_JOINT_NAMES:
+                        radius = hand_radius
+                    elif joint_name in AppWindow.ANNY_FOOT_JOINT_NAMES:
+                        radius = foot_radius
+                    elif joint_name in AppWindow.ANNY_HEAD_JOINT_NAMES:
+                        radius = head_radius
+                    elif joint_name in AppWindow.ANNY_BODY_JOINT_NAMES:
+                        radius = body_radius
+                    else:
+                        logger.warning(
+                            f'Unknown ANNY joint "{joint_name}"; using body radius'
+                        )
+                        radius = body_radius
+                else:
+                    radius = body_radius
+                    if joint_name in LEFT_HAND_KEYPOINT_NAMES + RIGHT_HAND_KEYPOINT_NAMES:
+                        radius = hand_radius
+                    elif joint_name in HEAD_KEYPOINT_NAMES:
+                        radius = head_radius
+                    elif joint_name in FOOT_KEYPOINT_NAMES:
+                        radius = foot_radius
 
                 current_mat = mat_selected if (AppWindow.SELECTED_JOINT is not None) and (i == AppWindow.SELECTED_JOINT)\
                     else mat
