@@ -29,6 +29,7 @@ import os
 import sys
 import copy
 import glob
+import inspect
 import torch
 import joblib
 import platform
@@ -40,6 +41,7 @@ import open3d.visualization.gui as gui
 import scipy.spatial.transform.rotation as R
 import open3d.visualization.rendering as rendering
 import roma
+from collections import namedtuple
 import time
 # import supr as SUPR
 from SUPR.supr.pytorch.supr import SUPR
@@ -74,6 +76,31 @@ from simple_ik import simple_ik_solver
 
 
 isMacOS = (platform.system() == "Darwin")
+
+
+def enable_chumpy_compatibility():
+    """Keep legacy SMPL pickle files loadable on Python 3.11+ and NumPy 2."""
+    if not hasattr(inspect, "getargspec"):
+        inspect.ArgSpec = namedtuple("ArgSpec", "args varargs keywords defaults")
+        inspect.getargspec = lambda func: inspect.ArgSpec(
+            *inspect.getfullargspec(func)[:4]
+        )
+
+    legacy_numpy_aliases = {
+        "bool": bool,
+        "int": int,
+        "float": float,
+        "complex": complex,
+        "object": object,
+        "unicode": str,
+        "str": str,
+    }
+    for name, value in legacy_numpy_aliases.items():
+        if name not in np.__dict__:
+            setattr(np, name, value)
+
+
+enable_chumpy_compatibility()
 
 
 def euler_to_rotvec_for_body_model(body_model, euler_angle):
@@ -390,6 +417,33 @@ class AppWindow:
         'lowerarm01.L', 'lowerarm02.L',
         'clavicle.R', 'shoulder01.R', 'upperarm01.R', 'upperarm02.R',
         'lowerarm01.R', 'lowerarm02.R',
+    ]
+
+    # MHR joint names come directly from the MHR skeleton. Keep the small-joint
+    # groups explicit so their display size does not depend on name heuristics.
+    MHR_HAND_JOINT_NAMES = [
+        'r_wrist_twist', 'r_wrist',
+        'r_pinky0', 'r_pinky1', 'r_pinky2', 'r_pinky3', 'r_pinky_null',
+        'r_ring1', 'r_ring2', 'r_ring3', 'r_ring_null',
+        'r_middle1', 'r_middle2', 'r_middle3', 'r_middle_null',
+        'r_index1', 'r_index2', 'r_index3', 'r_index_null',
+        'r_thumb0', 'r_thumb1', 'r_thumb2', 'r_thumb3', 'r_thumb_null',
+        'l_wrist_twist', 'l_wrist',
+        'l_pinky0', 'l_pinky1', 'l_pinky2', 'l_pinky3', 'l_pinky_null',
+        'l_ring1', 'l_ring2', 'l_ring3', 'l_ring_null',
+        'l_middle1', 'l_middle2', 'l_middle3', 'l_middle_null',
+        'l_index1', 'l_index2', 'l_index3', 'l_index_null',
+        'l_thumb0', 'l_thumb1', 'l_thumb2', 'l_thumb3', 'l_thumb_null',
+    ]
+    MHR_FOOT_JOINT_NAMES = [
+        'l_foot', 'l_talocrural', 'l_subtalar', 'l_transversetarsal', 'l_ball',
+        'r_foot', 'r_talocrural', 'r_subtalar', 'r_transversetarsal', 'r_ball',
+    ]
+    MHR_HEAD_JOINT_NAMES = [
+        'c_neck', 'c_neck_twist1_proc', 'c_neck_twist0_proc',
+        'c_head', 'c_head_null', 'c_jaw', 'c_jaw_null', 'c_teeth',
+        'c_tongue0', 'c_tongue1', 'c_tongue2', 'c_tongue3', 'c_tongue4',
+        'r_eye', 'r_eye_null', 'l_eye', 'l_eye_null',
     ]
     CAM_FIRST = True
     # speichern fuer den camera reset button
@@ -1322,6 +1376,11 @@ class AppWindow:
             foot_radius = 0.01
             head_radius = 0.004
             body_radius = 0.025
+        elif bm == "MHR":
+            hand_radius = 0.01
+            foot_radius = 0.01
+            head_radius = 0.004
+            body_radius = 0.025
         else:
             hand_radius = 0.01
             foot_radius = 0.01
@@ -1358,6 +1417,15 @@ class AppWindow:
                         logger.warning(
                             f'Unknown ANNY joint "{joint_name}"; using body radius'
                         )
+                        radius = body_radius
+                elif bm == "MHR":
+                    if joint_name in AppWindow.MHR_HAND_JOINT_NAMES:
+                        radius = hand_radius
+                    elif joint_name in AppWindow.MHR_FOOT_JOINT_NAMES:
+                        radius = foot_radius
+                    elif joint_name in AppWindow.MHR_HEAD_JOINT_NAMES:
+                        radius = head_radius
+                    else:
                         radius = body_radius
                 else:
                     radius = body_radius

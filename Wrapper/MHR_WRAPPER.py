@@ -1,19 +1,28 @@
+from pathlib import Path
+
 import torch
 import numpy as np
-from MHR.mhr.mhr import MHR
+from mhr.mhr import MHR
 from Wrapper.body_model_wrapper import BodyModelWrapper
 
 NUM_IDENTITY_BLENDSHAPES = 45
 NUM_FACE_EXPRESSION_BLENDSHAPES = 72
 NUM_MODEL_PARAMETERS = 204
 LOD = 1
+MHR_ASSETS_DIR = (
+    Path(__file__).resolve().parents[1] / "data" / "body_models" / "mhr" / "assets"
+)
 # idk was das isti
 UNBOUNDED_SENTINEL = 1.0e30
 UNBOUNDED_FALLBACK = 3.14
 
 class MHR_WRAPPER(BodyModelWrapper):
     def preload_body_model(self, gender=None):
-        self._model = MHR.from_files(device=torch.device("cpu"), lod=LOD)
+        if not MHR_ASSETS_DIR.is_dir():
+            raise FileNotFoundError(f"MHR assets not found at {MHR_ASSETS_DIR}")
+        self._model = MHR.from_files(
+            folder=MHR_ASSETS_DIR, device=torch.device("cpu"), lod=LOD
+        )
         self._identity_coeffs = torch.zeros(1, NUM_IDENTITY_BLENDSHAPES)
         self._face_expr_coeffs = torch.zeros(1, NUM_FACE_EXPRESSION_BLENDSHAPES)
         self._faces = np.asarray(self._model.character.mesh.faces, dtype=np.int32)
