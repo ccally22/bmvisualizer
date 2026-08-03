@@ -1,10 +1,32 @@
 # Body Model Visualizer
 
-### Introduction
+## Introduction
 
-This is a simple Open3D-based GUI for SMPL-family body models. This GUI lets you
-play with the shape, expression, and pose parameters of SMPL, SMPL-X, MANO, FLAME
-body models. Features include:
+Body Model Visualizer is an Open3D-based GUI for interactively exploring
+parametric human body and part models. Users can modify shape, expression,
+pose, and orientation parameters and inspect the resulting mesh immediately.
+
+
+Main features include:
+
+- Interactive editing of model parameters
+- Body-pose and global-orientation controls
+- Joint and joint-name visualization
+- A simple IK solver for matching an input pose
+- Export of edited model parameters
+- View, lighting, transparency, and material controls
+- Web visualization support
+
+It was originally developed for the SMPL-family body models : SMPL, SMPL-X, MANO and FLAME. This repository extends the original workflow by integrating additional models through wrappers, while k[...]
+ 
+Added/integrated backends:
+
+- SUPR, integrated directly into the existing application flow.`Wrapper/SUPR_WRAPPER.py` is therefore retained as a placeholder.
+- STAR, integrated through a model-specific wrapper
+- ANNY, integrated through a model-specific wrapper
+- MHR, integrated through a model-specific wrapper
+
+The following videos demonstrate the original UI features. They do not necessarily show the additional STAR, ANNY, MHR, or SUPR integrations.
 
 - Interactive editing of shape, expression, pose parameters
 
@@ -57,10 +79,10 @@ without the need to install a graphics software.
 
 ## Installation
 
-Clone the repo and install the requirements (use python3.9).
+Use the provided conda environment file (recommended):
 
-```shell
-pip install -r requirements.txt
+```bash
+conda env create -f environment.yml
 ```
 
 Download the SMPL, SMPL-X, MANO, FLAME body models:
@@ -70,31 +92,77 @@ Download the SMPL, SMPL-X, MANO, FLAME body models:
 - MANO: https://mano.is.tue.mpg.de/
 - FLAME: https://flame.is.tue.mpg.de/
   - For landmarks: https://github.com/soubhiksanyal/RingNet/blob/master/flame_model/
+Additional models integrated in this repo:
 
-Copy downloaded files under `data/body_models`, this folder should look like:
+- STAR: https://star.is.tue.mpg.de/
+  - place STAR files under `data/body_models/star/` as `star_male.npz`, `star_female.npz`, `star_neutral.npz`
+- SUPR: https://supr.is.tue.mpg.de/
+  - place SUPR files under `data/body_models/supr/` as `SUPR_MALE.npy`, `SUPR_FEMALE.npy`, `SUPR_NEUTRAL.npy`
+- ANNY source: https://github.com/naver/anny (included through submodule path `anny/`)
+  - ANNY runtime data is read from `anny/src/anny/data` (not from `data/body_models/anny`)
+- MHR source: https://github.com/facebookresearch/MHR
+  - this repo already includes `mhr/assets/` expected by the wrapper
 
-```shell
+Copy downloaded files under `data/body_models` so the tree includes:
+
+```text
 data
 └── body_models
     ├── flame
-    │   ├── FLAME_FEMALE.pkl
-    │   ├── FLAME_MALE.pkl
-    │   ├── FLAME_NEUTRAL.pkl
-    │   ├── flame_dynamic_embedding.npy
-    │   └── flame_static_embedding.pkl
+    │   ├── FLAME_FEMALE.pkl
+    │   ├── FLAME_MALE.pkl
+    │   ├── FLAME_NEUTRAL.pkl
+    │   ├── flame_dynamic_embedding.npy
+    │   └── flame_static_embedding.pkl
     ├── mano
-    │   ├── MANO_LEFT.pkl
-    │   └── MANO_RIGHT.pkl
+    │   ├── MANO_LEFT.pkl
+    │   └── MANO_RIGHT.pkl
     ├── smpl
-    │   ├── SMPL_FEMALE.pkl
-    │   ├── SMPL_MALE.pkl
-    │   └── SMPL_NEUTRAL.pkl
+    │   ├── SMPL_FEMALE.pkl
+    │   ├── SMPL_MALE.pkl
+    │   └── SMPL_NEUTRAL.pkl
+    ├── star
+    │   ├── star_female.npz
+    │   ├── star_male.npz
+    │   └── star_neutral.npz
+    ├── supr
+    │   ├── SUPR_FEMALE.npy
+    │   ├── SUPR_MALE.npy
+    │   └── SUPR_NEUTRAL.npy
     └── smplx
         ├── SMPLX_FEMALE.npz
         ├── SMPLX_MALE.npz
         └── SMPLX_NEUTRAL.npz
-
 ```
+
+Note for case-sensitive filesystems (Linux): SUPR loader in `main.py` currently uses lower-case names like `supr_male.npy`.
+If your filesystem is case-sensitive, keep filenames consistent with loader expectation.
+
+ANNY data used by `Wrapper/ANNY_WRAPPER.py` is loaded from the submodule path `anny/src/anny/data/`. Typical structure is:
+
+```text
+anny/
+└── src
+  └── anny
+    └── data
+      ├── mpfb2/
+      ├── shape_calibration/
+      └── ...
+```
+
+MHR assets used by `Wrapper/MHR_WRAPPER.py` are loaded from `mhr/assets/`. Typical files are:
+
+```text
+mhr/
+└── assets
+    ├── compact_v6_1.model
+    ├── corrective_activation.npz
+    ├── corrective_blendshapes_lod0.npz ... corrective_blendshapes_lod6.npz
+    ├── lod0.fbx ... lod6.fbx
+    └── mhr_model.pt
+```
+  
+
 
 Finally, run:
 ```shell
