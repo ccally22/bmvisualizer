@@ -2497,19 +2497,16 @@ class AppWindow:
             for gender in AppWindow.BODY_MODEL_GENDERS[body_model]:
                 logger.info(f'Loading {body_model}-{gender}')
 
-                # alter Code für SMPL, SUPR, SMPLX, MANO und FLAME
-                if body_model in ('SMPL', 'SUPR', 'SMPLX', 'MANO', 'FLAME'):
+                # alter Code für SMPL, SMPLX, MANO und FLAME
+                if body_model in ('SMPL', 'SMPLX', 'MANO', 'FLAME'):
                     extra_params = {'gender': gender}
                     if body_model in ('SMPLX', 'MANO', 'FLAME'):
                         extra_params['use_pca'] = False
                         extra_params['flat_hand_mean'] = True
                         extra_params['use_face_contour'] = True
-                    try:
-                        model = eval(body_model.upper())(f'data/body_models/{body_model.lower()}', **extra_params)
-                    except:
-                        model = eval(body_model.upper())(f'data/body_models/{body_model.lower()}/supr_{gender}.npy')
+                    model = eval(body_model.upper())(f'data/body_models/{body_model.lower()}', **extra_params)
 
-                # wrapper-Implementierung fuer alle neuen Modelle + STAR und ANNY
+                # wrapper-Implementierung fuer alle neuen Modelle + SUPR, STAR und ANNY
                 else:
                     if body_model not in wrapper_dict.WRAPPER_CLASSES:
                         logger.warning(f'Skipping unavailable body model wrapper {body_model}')
@@ -2531,7 +2528,7 @@ class AppWindow:
         self._scene.scene.remove_geometry("__body_model__")
 
         # alter Code für SMPL, SUPR, SMPLX, MANO und FLAME
-        if body_model in ('SMPL', 'SUPR', 'SMPLX', 'MANO', 'FLAME'):
+        if body_model in ('SMPL', 'SMPLX', 'MANO', 'FLAME'):
             model = AppWindow.PRELOADED_BODY_MODELS[f'{body_model.lower()}-{gender.lower()}']
             # input eingaben
             input_params = copy.deepcopy(AppWindow.POSE_PARAMS[body_model])
@@ -2559,7 +2556,7 @@ class AppWindow:
 
             faces = model.faces
 
-       # wrapper-Implementierung fuer alle neuen Modelle + STAR und ANNY
+       # wrapper-Implementierung fuer alle neuen Modelle + SUPR, STAR und ANNY
         else:
             # parameter von der gui
             input_params = copy.deepcopy(AppWindow.POSE_PARAMS[body_model])
