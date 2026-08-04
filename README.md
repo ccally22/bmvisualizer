@@ -17,7 +17,7 @@ Main features include:
 - View, lighting, transparency, and material controls
 - Web visualization support
 
-It was originally developed for the SMPL-family body models : SMPL, SMPL-X, MANO and FLAME. This repository extends the original workflow by integrating additional models through wrappers, while k[...]
+It was originally developed for the SMPL-family body models : SMPL, SMPL-X, MANO and FLAME. This repository extends the original workflow by integrating additional models through wrappers, while keeping the existing UI and rendering loop.
  
 Added/integrated backends:
 
