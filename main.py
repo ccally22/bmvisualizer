@@ -109,6 +109,15 @@ def euler_to_rotvec_for_body_model(body_model, euler_angle):
     return R.Rotation.from_euler('xyz', euler_angle, degrees=True).as_rotvec()
 
 
+def rotvec_to_euler_for_body_model(body_model, rotvec):
+    # Inverse of euler_to_rotvec_for_body_model, used to redisplay a stored
+    # axis-angle pose value back onto the euler-angle UI sliders?
+    euler = R.Rotation.from_rotvec(rotvec).as_euler('xyz', degrees=True)
+    if body_model.lower() == 'anny':
+        euler = [euler[0], euler[2], euler[1]]
+    return euler
+
+
 class Settings:
     UNLIT = "defaultUnlit"
     LIT = "defaultLit"
@@ -451,6 +460,11 @@ class AppWindow:
     CAM_CENTER = None
 
     PRELOADED_BODY_MODELS = {}
+
+    # save these values per model so ui can be representative of actual values
+    BODY_BETAS = {}
+    BODY_EXPS = {}
+    TRANSPARENCY = {}
 
     POSE_PARAMS = {
         'SMPL': {
@@ -1360,20 +1374,28 @@ class AppWindow:
                     self._scene.remove_3d_label(label3d)
 
     def _on_show_joints(self, show):
-
         if self._scene.scene.has_geometry("__body_model__"):
-            mat_body = rendering.MaterialRecord()
             if show:
-                mat_body.shader = "defaultLitTransparency"
-                mat_body.base_color = [0.9, 0.9, 0.9, 0.8]
+                suggested = 0.2  # or whatever value you want
+
+                # Store it as the current transparency for this body model
+                bm = self._body_model.selected_text
+                AppWindow.TRANSPARENCY[bm] = suggested
+
+                # Update the slider so the UI reflects the change
+                self._transparency.double_value = suggested
+
+                # Apply it through the common transparency method
+                self._apply_transparency(suggested)
             else:
-                mat_body.shader = "defaultLit"
-                mat_body.base_color = [0.9, 0.9, 0.9, 1.0]
-            self._scene.scene.modify_geometry_material("__body_model__", mat_body)
+                bm = self._body_model.selected_text
+                AppWindow.TRANSPARENCY[bm] = 0.0
+                self._transparency.double_value = 0.0
+                self._apply_transparency(0.0)
 
         joints = AppWindow.JOINTS
         num_joints = joints.shape[0] if joints is not None else 0
-        bm = self._body_model.selected_text
+
 
         for i in range(300):
             if self._scene.scene.has_geometry(f"__joints_{i}__"):
@@ -1690,7 +1712,8 @@ class AppWindow:
             self._updating_anny_hierarchy = True
             self._body_pose_joint.selected_index = bone_index
             self._updating_anny_hierarchy = False
-            self._reset_rot_sliders()
+            #self._reset_rot_sliders()
+            self._sync_pose_joint_sliders()
 
     def _sync_anny_hierarchy_to_bone(self, bone_index):
         if self._body_model.selected_text != "ANNY":
@@ -1740,10 +1763,10 @@ class AppWindow:
 
     def _on_body_model(self, name, index):
         logger.info(f"Loading body model {name}-{index}")
-        self._body_beta_val.double_value = 0.0
-        # Expression zurücksetzen bei Modell-Wechsel
-        self._body_exp_tensor = torch.zeros(1, 10)
-        self._body_exp_val.double_value = 0.0
+        #self._body_beta_val.double_value = 0.0
+        # not resetting expression anymore instead restore old values
+        self._body_exp_tensor = self._get_or_create_exp_tensor(name)
+        self._body_exp_val.double_value = self._body_exp_tensor[0, 0].item()
         AppWindow.CAM_FIRST = True
         #self.load_body_model(name)
         self._set_model_specific_ui_visibility(name)
@@ -1761,8 +1784,9 @@ class AppWindow:
             for i in range(AppWindow.BODY_MODEL_N_BETAS[name]):
                 self._body_model_shape_comp.add_item(f"{i+1:02d}")
             self._body_beta_val.set_limits(-5.0, 5.0)
-            self._body_beta_val.double_value = 0.0
-            self._body_beta_tensor = torch.zeros(1, AppWindow.BODY_MODEL_N_BETAS[name])
+            # restore betas not reset
+            self._body_beta_tensor = self._get_or_create_beta_tensor(name)
+            self._body_beta_val.double_value = self._body_beta_tensor[0, 0].item()
             self._body_beta_text.text = f",".join(f'{x:.1f}' for x in self._body_beta_tensor[0].numpy().tolist())
 
         self._body_model_gender.clear_items()
@@ -1801,7 +1825,10 @@ class AppWindow:
         if name == "ANNY" and self._body_pose_joint.number_of_items > 0:
             self._sync_anny_hierarchy_to_bone(0)
 
-        self._reset_rot_sliders()
+        #self._reset_rot_sliders()
+        self._sync_pose_joint_sliders()
+        self._sync_global_sliders()
+        self._sync_transparency()
         AppWindow.SELECTED_JOINT = None
         self._on_show_joints(self._show_joints.checked)
 
@@ -1819,7 +1846,11 @@ class AppWindow:
         self._body_beta_val.double_value = 0.0
         AppWindow.GROUND_OFFSET = None
         self.load_body_model(self._body_model.selected_text, gender=name)
-        self._reset_rot_sliders()
+       # self._reset_rot_sliders()
+        self._sync_beta_slider()
+        self._sync_pose_joint_sliders()
+        self._sync_global_sliders()
+        self._sync_transparency()
         self._on_show_joints(self._show_joints.checked)
         # self._apply_settings()
 
@@ -1845,7 +1876,7 @@ class AppWindow:
         )
 
     def _on_body_pose_joint(self, name, index):
-        self._reset_rot_sliders()
+        self._sync_pose_joint_sliders()
         if self._body_model.selected_text == "ANNY" and not self._updating_anny_hierarchy:
             bone_index = int(name.split('-')[0])
             self._sync_anny_hierarchy_to_bone(bone_index)
@@ -1953,7 +1984,7 @@ class AppWindow:
             if bm in ('SUPR', 'STAR', 'ANNY') and i == 0:
                 continue
             self._body_pose_joint.add_item(f'{i}-{joint_names[i]}')
-        self._reset_rot_sliders()
+        self._sync_pose_joint_sliders()
 
 
     def _on_body_beta_reset(self):
@@ -1964,6 +1995,7 @@ class AppWindow:
         ]
         else:
             self._body_beta_tensor = torch.zeros(1, AppWindow.BODY_MODEL_N_BETAS[self._body_model.selected_text])
+            AppWindow.BODY_BETAS[self._body_model.selected_text] = self._body_beta_tensor
             self._body_beta_text.text = f",".join(f'{x:.1f}' for x in self._body_beta_tensor[0].numpy().tolist())
             self._body_beta_val.double_value = 0.0
         AppWindow.GROUND_OFFSET = None
@@ -1991,6 +2023,7 @@ class AppWindow:
 
     def _on_body_exp_reset(self):
         self._body_exp_tensor = torch.zeros(1, 10)
+        AppWindow.BODY_EXPS[self._body_model.selected_text] = self._body_exp_tensor
         self._body_exp_text.text = f",".join(f'{x:.1f}' for x in self._body_exp_tensor[0].numpy().tolist())
         self._body_exp_val.double_value = 0.0
         self.load_body_model(
@@ -2003,7 +2036,7 @@ class AppWindow:
         #bp = self._body_pose_comp.selected_text
         for key in AppWindow.POSE_PARAMS[bm]:
             AppWindow.POSE_PARAMS[bm][key] = torch.zeros_like(AppWindow.POSE_PARAMS[bm][key])
-        self._reset_rot_sliders()
+        self._sync_pose_joint_sliders()
         self.load_body_model(
             self._body_model.selected_text,
             gender=self._body_model_gender.selected_text,
@@ -2135,13 +2168,11 @@ class AppWindow:
         )
 
     def _on_transparency(self, val):
-        if self._scene.scene.has_geometry("__body_model__"):
-            mat_body = rendering.MaterialRecord()
-            mat_body.shader = "defaultLitTransparency"
-            mat_body.base_color = [0.9, 0.9, 0.9, 1 - val]
-            self._scene.scene.modify_geometry_material("__body_model__", mat_body)
+        AppWindow.TRANSPARENCY[self._body_model.selected_text] = val
+        self._apply_transparency(val)
 
     def _on_transparency_reset(self):
+        AppWindow.TRANSPARENCY[self._body_model.selected_text] = 0.0
         if self._scene.scene.has_geometry("__body_model__"):
             mat_body = rendering.MaterialRecord()
             mat_body.shader = "defaultLit"
@@ -2335,6 +2366,112 @@ class AppWindow:
         self._body_pose_joint_y.int_value = 0
         self._body_pose_joint_z.int_value = 0
         self._body_pose_joint_val.double_value = 0.0
+    # new sync
+    def _sync_pose_joint_sliders(self):
+        # sync joint sliders to represent actual values instead of resetting
+        bm = self._body_model.selected_text
+        bp = self._body_pose_comp.selected_text
+
+        if not bp or self._body_pose_joint.number_of_items == 0 or \
+                not self._body_pose_joint.selected_text:
+            self._reset_rot_sliders()
+            return
+
+        ji = int(self._body_pose_joint.selected_text.split('-')[0])
+
+        if bm == 'MHR':
+            gender = self._body_model_gender.selected_text
+            wrapper = AppWindow.PRELOADED_BODY_MODELS[f'mhr-{gender.lower()}']
+            lo, hi = wrapper._pose_param_limits[ji]
+            self._body_pose_joint_val.set_limits(float(lo), float(hi))
+            self._body_pose_joint_val.double_value = float(
+                AppWindow.POSE_PARAMS['MHR']['model_parameters'][0, ji]
+            )
+            self._body_pose_joint_x.int_value = 0
+            self._body_pose_joint_y.int_value = 0
+            self._body_pose_joint_z.int_value = 0
+            return
+
+        rotvec = AppWindow.POSE_PARAMS[bm][bp][0, ji].numpy()
+        euler = rotvec_to_euler_for_body_model(bm, rotvec)
+        self._body_pose_joint_x.int_value = int(round(euler[0]))
+        self._body_pose_joint_y.int_value = int(round(euler[1]))
+        self._body_pose_joint_z.int_value = int(round(euler[2]))
+        self._body_pose_joint_val.double_value = 0.0
+
+    def _sync_global_sliders(self):
+        # same here translation and orientation sync instead of reset
+        bm = self._body_model.selected_text
+        params = AppWindow.POSE_PARAMS.get(bm, {})
+
+        if "trans" in params:
+            t = params["trans"][0, 0]
+            self._trans_x.double_value = float(t[0])
+            self._trans_y.double_value = float(t[1])
+            self._trans_z.double_value = float(t[2])
+        else:
+            self._trans_x.double_value = 0.0
+            self._trans_y.double_value = 0.0
+            self._trans_z.double_value = 0.0
+
+        if "global_orient" in params:
+            r = params["global_orient"][0, 0]
+            self._rot_x.double_value = float(r[0])
+            self._rot_y.double_value = float(r[1])
+            self._rot_z.double_value = float(r[2])
+        elif "pose" in params:
+            p = params["pose"][0, 0]
+            if bm == 'ANNY':
+                self._rot_x.double_value = float(p[0])
+                self._rot_y.double_value = float(p[2])
+                self._rot_z.double_value = float(-p[1])
+            else:
+                self._rot_x.double_value = float(p[0])
+                self._rot_y.double_value = float(p[1])
+                self._rot_z.double_value = float(p[2])
+        else:
+            self._rot_x.double_value = 0.0
+            self._rot_y.double_value = 0.0
+            self._rot_z.double_value = 0.0
+
+    def _get_or_create_beta_tensor(self, name):
+        if name not in AppWindow.BODY_BETAS:
+            AppWindow.BODY_BETAS[name] = torch.zeros(1, AppWindow.BODY_MODEL_N_BETAS[name])
+        return AppWindow.BODY_BETAS[name]
+
+    def _get_or_create_exp_tensor(self, name):
+        if name not in AppWindow.BODY_EXPS:
+            AppWindow.BODY_EXPS[name] = torch.zeros(1, 10)
+        return AppWindow.BODY_EXPS[name]
+
+    def _sync_beta_slider(self):
+        if self._body_model.selected_text == 'ANNY':
+            name = self._body_model_shape_comp.selected_text
+            self._body_beta_val.double_value = self._anny_phenotype_values.get(name, 0.5)
+        else:
+            idx = self._body_model_shape_comp.selected_index
+            if idx < 0:
+                idx = 0
+            self._body_beta_val.double_value = self._body_beta_tensor[0, idx].item()
+
+    def _sync_exp_slider(self):
+        idx = self._body_model_exp_comp.selected_index
+        if idx < 0:
+            idx = 0
+        self._body_exp_val.double_value = self._body_exp_tensor[0, idx].item()
+
+    def _apply_transparency(self, val):
+        if self._scene.scene.has_geometry("__body_model__"):
+            mat_body = rendering.MaterialRecord()
+            mat_body.shader = "defaultLitTransparency"
+            mat_body.base_color = [0.9, 0.9, 0.9, 1 - val]
+            self._scene.scene.modify_geometry_material("__body_model__", mat_body)
+
+    def _sync_transparency(self):
+        bm = self._body_model.selected_text
+        val = AppWindow.TRANSPARENCY.get(bm, 0.0)
+        self._transparency.double_value = val
+        self._apply_transparency(val)
 
     def _on_material_prefab(self, name, index):
         self.settings.apply_material_prefab(name)
@@ -2599,6 +2736,13 @@ class AppWindow:
 
         AppWindow.BODY_TRANSL = torch.tensor([[0, ground_offset, 0]])
         self._on_show_joints(self._show_joints.checked)
+
+        # add_geometry() above always attaches the default (opaque) material,
+        # which would silently discard any transparency previously set for
+        # this model every time the mesh is rebuilt (e.g. on every pose/beta
+        # slider tweak, not just on model switch). Re-apply it here so the
+        # rendered mesh always matches the transparency slider.
+        self._apply_transparency(AppWindow.TRANSPARENCY.get(body_model, 0.0))
 
     def load(self, path):
         # self._scene.scene.clear_geometry()
