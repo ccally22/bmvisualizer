@@ -141,9 +141,11 @@ If your filesystem is case-sensitive, keep filenames consistent with loader expe
 ANNY data used by `Wrapper/ANNY_WRAPPER.py` is loaded from the submodule path `anny/src/anny/data/`. Typical structure is:
 
 ```text
-anny/
-└── src
-  └── anny
+data
+└── body_models
+ └──anny/
+  └── src
+   └── anny
     └── data
       ├── mpfb2/
       ├── shape_calibration/
@@ -153,8 +155,10 @@ anny/
 MHR assets used by `Wrapper/MHR_WRAPPER.py` are loaded from `mhr/assets/`. Typical files are:
 
 ```text
-mhr/
-└── assets
+data
+└── body_models
+ └──mhr/
+  └── assets
     ├── compact_v6_1.model
     ├── corrective_activation.npz
     ├── corrective_blendshapes_lod0.npz ... corrective_blendshapes_lod6.npz
