@@ -1373,22 +1373,16 @@ class AppWindow:
                 for label3d in self.joint_labels_3d_list:
                     self._scene.remove_3d_label(label3d)
 
-    def _on_show_joints(self, show):
-        if self._scene.scene.has_geometry("__body_model__"):
+    def _on_show_joints(self, show, update_transparency=True):
+        bm = self._body_model.selected_text
+        if update_transparency and self._scene.scene.has_geometry("__body_model__"):
             if show:
-                suggested = 0.2  # or whatever value you want
-
-                # Store it as the current transparency for this body model
-                bm = self._body_model.selected_text
+                suggested = 0.2
                 AppWindow.TRANSPARENCY[bm] = suggested
-
-                # Update the slider so the UI reflects the change
                 self._transparency.double_value = suggested
-
-                # Apply it through the common transparency method
                 self._apply_transparency(suggested)
             else:
-                bm = self._body_model.selected_text
+
                 AppWindow.TRANSPARENCY[bm] = 0.0
                 self._transparency.double_value = 0.0
                 self._apply_transparency(0.0)
@@ -1830,7 +1824,7 @@ class AppWindow:
         self._sync_global_sliders()
         self._sync_transparency()
         AppWindow.SELECTED_JOINT = None
-        self._on_show_joints(self._show_joints.checked)
+        self._on_show_joints(self._show_joints.checked, update_transparency=False)
 
         # pose comp nur fuer SMPLX und FLAME anzeigen
         need_comp = name in ('SMPLX', 'FLAME')
@@ -1851,7 +1845,7 @@ class AppWindow:
         self._sync_pose_joint_sliders()
         self._sync_global_sliders()
         self._sync_transparency()
-        self._on_show_joints(self._show_joints.checked)
+        self._on_show_joints(self._show_joints.checked, update_transparency=False)
         # self._apply_settings()
 
     def _on_body_beta_val(self, val):
@@ -2223,7 +2217,7 @@ class AppWindow:
                 transl = np.array([0.0, 0.0, step])
 
             AppWindow.JOINTS[AppWindow.SELECTED_JOINT] = AppWindow.JOINTS[AppWindow.SELECTED_JOINT] + transl
-            self._on_show_joints(show=True)
+            self._on_show_joints(show=True, update_transparency=False)
             return gui.Widget.EventCallbackResult.HANDLED
         return gui.Widget.EventCallbackResult.IGNORED
 
@@ -2273,7 +2267,7 @@ class AppWindow:
 
                 def update_ui():
                     self._update_label(f'Dragging joint "{jn}"')
-                    self._on_show_joints(show = True)
+                    self._on_show_joints(show = True, update_transparency=False)
 
                 gui.Application.instance.post_to_main_thread(self.window, update_ui)
 
@@ -2298,7 +2292,7 @@ class AppWindow:
                 self._scene.frame.height)
 
             AppWindow.JOINTS[AppWindow.SELECTED_JOINT] = np.array(world[:3])
-            self._on_show_joints(show = True)
+            self._on_show_joints(show = True, update_transparency=False)
 
             return gui.Widget.EventCallbackResult.HANDLED
 
@@ -2735,7 +2729,7 @@ class AppWindow:
             AppWindow.CAM_CENTER = bounds.get_center()
 
         AppWindow.BODY_TRANSL = torch.tensor([[0, ground_offset, 0]])
-        self._on_show_joints(self._show_joints.checked)
+        self._on_show_joints(self._show_joints.checked, update_transparency=False)
 
         # add_geometry() above always attaches the default (opaque) material,
         # which would silently discard any transparency previously set for
