@@ -1,5 +1,5 @@
 from Wrapper.body_model_wrapper import BodyModelWrapper
-import 
+from SUPR.supr.pytorch.supr import SUPR
 
 class SUPR_WRAPPER(BodyModelWrapper):
     def preload_body_model(self, gender):
